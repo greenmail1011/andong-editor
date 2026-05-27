@@ -1608,13 +1608,13 @@ function renderScanContent() {
   for (let i = 1; i <= SCAN_TOTAL; i++) {
     const p = String(i).padStart(3, '0');
     imgs.push(`
-      <div style="text-align:center;margin-bottom:8px;">
+      <div style="text-align:center;margin-bottom:6px;">
         <span style="font-size:11px;color:var(--muted);">第 ${i} 頁</span>
       </div>
       <img src="./scan_pages/page_${p}.jpg"
            alt="第${i}頁"
            loading="lazy"
-           style="width:100%;max-width:860px;display:block;margin:0 auto 32px;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.15);">`);
+           style="width:100%;max-width:860px;display:block;margin:0 auto 28px;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.15);">`);
   }
   content.innerHTML = `<div style="padding:16px 0 60px;">${imgs.join('')}</div>`;
 }
