@@ -107,6 +107,11 @@
       align-items: center;
       gap: 10px;
       padding: 14px 24px;
+      position: sticky;
+      top: 56px;
+      z-index: 90;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
     }
     .btn {
       display: flex;
@@ -317,6 +322,43 @@
     }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* ── Trash view ── */
+    .trash-row {
+      display: grid;
+      grid-template-columns: 40px 1fr 1fr 100px;
+      border-bottom: 1px solid var(--border);
+    }
+    .trash-num {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: var(--muted); background: var(--bg);
+      border-right: 1px solid var(--border);
+    }
+    .trash-zh {
+      padding: 12px 16px; font-size: 14px; line-height: 1.8;
+      font-family: "PingFang TC","Noto Serif TC","Source Han Serif TC",serif;
+      background: var(--zh-bg); border-right: 1px solid var(--border);
+    }
+    .trash-en {
+      padding: 12px 16px; font-size: 13px; line-height: 1.8;
+      background: var(--en-bg); border-right: 1px solid var(--border);
+    }
+    .trash-actions {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 6px; padding: 8px; background: var(--bg);
+    }
+    .restore-btn {
+      font-size: 11px; font-weight: 600; padding: 4px 10px;
+      border: 1px solid var(--accent); border-radius: 5px;
+      background: var(--accent-light); color: var(--accent); cursor: pointer;
+      white-space: nowrap;
+    }
+    .restore-btn:hover { background: var(--accent); color: #fff; }
+    #btn-trash .trash-badge {
+      background: var(--danger); color: #fff;
+      border-radius: 9px; font-size: 10px; font-weight: 700;
+      padding: 1px 5px; margin-left: 2px; display: none;
+    }
+
     /* ── Presence avatars ── */
     #presence-area {
       display: flex;
@@ -334,6 +376,143 @@
       font-weight: 700;
       color: #fff;
       margin-left: -6px;
+    }
+
+    /* ── Inline View ── */
+    #inline-view { padding: 0 24px 80px; }
+    #inline-view-bar {
+      position: sticky;
+      top: 112px;
+      background: var(--bg);
+      z-index: 10;
+      padding: 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .ft-fulltext {
+      padding: 28px 4px;
+      font-size: 15px;
+      line-height: 2;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+    }
+    #ft-zh-text { font-family: "PingFang TC","Noto Serif TC","Source Han Serif TC",serif; }
+
+    /* ── Full-text page separator ── */
+    .ft-fulltext-block { padding: 20px 4px 60px; }
+    .ft-para {
+      font-size: 15px;
+      line-height: 2;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    #ft-zh-text .ft-para { font-family: "PingFang TC","Noto Serif TC","Source Han Serif TC",serif; }
+    .ft-page-sep {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 22px 0 18px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+    .ft-page-sep::before, .ft-page-sep::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Bilingual table ── */
+    #bt-scroll { flex: 1; overflow-y: auto; }
+    .bt-header {
+      display: grid;
+      grid-template-columns: 40px 1fr 1fr 44px;
+      position: sticky; top: 166px;
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      z-index: 1;
+    }
+    .bt-header-cell {
+      padding: 10px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .bt-row {
+      display: grid;
+      grid-template-columns: 40px 1fr 1fr;
+      border-bottom: 1px solid var(--border);
+    }
+    .bt-row:last-child { border-bottom: none; }
+    .bt-num {
+      padding: 14px 8px;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+      text-align: center;
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+    }
+    .bt-zh {
+      padding: 14px 18px;
+      font-family: "PingFang TC","Noto Serif TC","Source Han Serif TC",serif;
+      font-size: 14px;
+      line-height: 1.8;
+      background: var(--zh-bg);
+      border-right: 1px solid var(--border);
+      white-space: pre-wrap;
+    }
+    .bt-en {
+      padding: 14px 18px;
+      font-size: 13.5px;
+      line-height: 1.8;
+      background: var(--en-bg);
+      white-space: pre-wrap;
+    }
+
+    /* ── Editable bilingual rows ── */
+    .bt-row-edit {
+      display: grid;
+      grid-template-columns: 40px 1fr 1fr 44px;
+      border-bottom: 1px solid var(--border);
+      transition: box-shadow 0.2s;
+    }
+    .bt-row-edit:hover { box-shadow: 0 2px 12px rgba(79,110,247,0.07); }
+    .bt-row-edit.editing { box-shadow: 0 0 0 2px rgba(79,110,247,0.15) inset; }
+    .bt-row-edit.remote-editing { box-shadow: 0 0 0 2px rgba(245,158,11,0.15) inset; }
+    .bt-zh-cell { background: var(--zh-bg); border-right: 1px solid var(--border); }
+    .bt-en-cell { background: var(--en-bg); border-right: 1px solid var(--border); }
+    .bt-row-edit textarea {
+      width: 100%;
+      min-height: 64px;
+      resize: none;
+      border: none;
+      outline: none;
+      padding: 12px 16px;
+      font-size: var(--cell-font-size);
+      line-height: 1.75;
+      font-family: inherit;
+      color: var(--text);
+      background: transparent;
+    }
+    .bt-zh-cell textarea { font-family: "PingFang TC","Noto Serif TC","Source Han Serif TC",serif; }
+    .bt-row-edit textarea::placeholder { color: #c0c7d8; }
+    .bt-row-edit .bt-row-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px;
+      background: var(--bg);
     }
   </style>
 </head>
@@ -355,6 +534,7 @@
 <header>
   <div class="logo">中<span>英</span>對照</div>
   <input id="doc-title-input" placeholder="文件標題…" maxlength="60" />
+  <button id="btn-scan" onclick="toggleInlineView('scan')" title="查閱掃描文本" style="border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:7px;padding:4px 12px;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;">文本</button>
   <div class="spacer"></div>
   <div id="presence-area"></div>
   <div id="status-bar">
@@ -365,9 +545,21 @@
 
 <!-- ══ Toolbar ══ -->
 <div id="toolbar">
-  <button class="btn primary" onclick="addRow()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-    新增句子
+  <button class="btn" id="btn-bilingual" onclick="toggleInlineView('bilingual')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+    逐句翻譯
+  </button>
+  <button class="btn" id="btn-zh" onclick="toggleInlineView('zh')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    中文全文
+  </button>
+  <button class="btn" id="btn-en" onclick="toggleInlineView('en')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    英文全文
+  </button>
+  <button class="btn" id="btn-trash" onclick="toggleInlineView('trash')" title="刪除暫存區（保留一個月）">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 11a2 2 0 002 2h8a2 2 0 002-2L19 8"/><path d="M10 12v5M14 12v5"/></svg>
+    暫存區<span class="trash-badge" id="trash-count"></span>
   </button>
   <div style="flex:1"></div>
   <div style="display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:8px;padding:4px 10px;background:var(--surface)">
@@ -375,6 +567,18 @@
     <span id="font-size-label" style="font-size:12px;color:var(--muted);min-width:30px;text-align:center">15px</span>
     <button onclick="changeFontSize(1)"  title="放大字型" style="border:none;background:none;cursor:pointer;font-size:16px;color:var(--text);padding:0 2px;line-height:1;font-weight:600">A+</button>
   </div>
+</div>
+
+<!-- ══ Inline View ══ -->
+<div id="inline-view" style="display:none;">
+  <div id="inline-view-bar">
+    <span id="inline-view-title" style="font-size:15px;font-weight:700;flex:1;"></span>
+    <button onclick="copyInlineView()" class="btn primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      複製
+    </button>
+  </div>
+  <div id="inline-view-content"></div>
 </div>
 
 <!-- ══ Column labels ══ -->
@@ -733,6 +937,23 @@ const SEED_PAIRS = [
 ];
 
 // ════════════════════════════════════════════
+// Page break map  (seed row ID → document page number)
+// ════════════════════════════════════════════
+const PAGE_BREAKS = {
+  'seed_0006':6,'seed_0007':7,'seed_0011':10,'seed_0016':13,
+  'seed_0024':18,'seed_0027':19,'seed_0030':21,'seed_0039':24,
+  'seed_0041':25,'seed_0043':27,'seed_0044':28,'seed_0047':35,
+  'seed_0051':41,'seed_0053':44,'seed_0055':49,'seed_0057':51,
+  'seed_0059':52,'seed_0069':53,'seed_0079':54,'seed_0088':55,
+  'seed_0103':56,'seed_0111':57,'seed_0119':58,'seed_0125':59,
+  'seed_0141':60,'seed_0151':61,'seed_0161':62,'seed_0172':63,
+  'seed_0181':64,'seed_0188':65,'seed_0197':66,'seed_0202':67,
+  'seed_0211':68,'seed_0216':69,'seed_0221':70,'seed_0227':71,
+  'seed_0234':73,'seed_0250':74,'seed_0259':75,'seed_0267':76,
+  'seed_0279':79
+};
+
+// ════════════════════════════════════════════
 // Config & State
 // ════════════════════════════════════════════
 let db = null;
@@ -741,7 +962,10 @@ let presenceRef = null;
 let myId = 'user_' + Math.random().toString(36).slice(2, 7);
 let myColor = randomColor();
 let localRows = [];
+let localPageBreaks = {};
+let localTrash = {};
 let remoteEditing = {};
+let initialLoad = true;
 let syncTimeout = null;
 let titleTimeout = null;
 
@@ -847,6 +1071,7 @@ function seedDatabase() {
   rowsObj.__order = order;
   docRef.child('rows').set(rowsObj);
   docRef.child('title').set('安東道場禮節手冊');
+  docRef.child('pageBreaks').set(PAGE_BREAKS);
   showToast('✅ 已載入《禮節手冊》共 ' + SEED_PAIRS.length + ' 句');
 }
 
@@ -884,6 +1109,39 @@ function startListening() {
     const title = snap.val() || '';
     const el = document.getElementById('doc-title-input');
     if (document.activeElement !== el) el.value = title;
+  });
+
+  // Trash
+  docRef.child('trash').on('value', snap => {
+    const raw = snap.val() || {};
+    // Auto-expire items older than 30 days
+    const ONE_MONTH = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    Object.entries(raw).forEach(([id, item]) => {
+      if (item.deletedAt && (now - item.deletedAt) > ONE_MONTH) {
+        docRef.child('trash/' + id).remove();
+        delete raw[id];
+      }
+    });
+    localTrash = raw;
+    const count = Object.keys(localTrash).length;
+    const badge = document.getElementById('trash-count');
+    if (badge) {
+      badge.textContent = count || '';
+      badge.style.display = count > 0 ? '' : 'none';
+    }
+    if (currentInlineView === 'trash') renderTrashView();
+  });
+
+  // Page breaks
+  docRef.child('pageBreaks').on('value', snap => {
+    const data = snap.val();
+    if (data) {
+      localPageBreaks = data;
+    } else {
+      localPageBreaks = PAGE_BREAKS;
+      docRef.child('pageBreaks').set(PAGE_BREAKS); // auto-seed for existing DBs
+    }
   });
 
   // Remote editing indicators
@@ -945,9 +1203,50 @@ function addRow(zh = '', en = '') {
 }
 
 function deleteRow(id) {
+  const idx = localRows.findIndex(r => r.id === id);
+  if (idx === -1) return;
+  const row = localRows[idx];
+
+  // Move to trash
+  if (docRef) {
+    docRef.child('trash/' + id).set({
+      zh: row.zh || '', en: row.en || '',
+      createdAt: row.createdAt || 0,
+      deletedAt: Date.now()
+    });
+  }
+
   localRows = localRows.filter(r => r.id !== id);
   saveRowsToFirebase();
   renderAll();
+  showToast('已移至暫存區（保留一個月）');
+}
+
+function restoreRow(id) {
+  const item = localTrash[id];
+  if (!item) return;
+  const restoredRow = { id, zh: item.zh, en: item.en, createdAt: item.createdAt || Date.now() };
+
+  // Insert at the correct position based on ID ordering
+  const rowOrder = r => {
+    const m = r.id.match(/(\d+)$/);
+    return m ? parseInt(m[1]) : (r.createdAt || 0);
+  };
+  const order = rowOrder(restoredRow);
+  let insertIdx = localRows.findIndex(r => rowOrder(r) > order);
+  if (insertIdx === -1) insertIdx = localRows.length;
+  localRows.splice(insertIdx, 0, restoredRow);
+
+  docRef.child('trash/' + id).remove();
+  saveRowsToFirebase();
+  renderAll();
+  showToast('✅ 已復原至原位置');
+  if (currentInlineView === 'trash') renderTrashView();
+}
+
+function permanentDelete(id) {
+  if (!confirm('確定要永久刪除這句話嗎？此操作無法復原。')) return;
+  docRef.child('trash/' + id).remove();
 }
 
 function moveRow(id, dir) {
@@ -1047,6 +1346,96 @@ function renderAll() {
   });
 
   updateEditingUI();
+  if (currentInlineView === 'bilingual') renderBilingualView();
+
+  // Auto-open bilingual view on first data load
+  if (initialLoad && localRows.length > 0) {
+    initialLoad = false;
+    openInlineView('bilingual');
+  }
+}
+
+// ════════════════════════════════════════════
+// Bilingual edit view render
+// ════════════════════════════════════════════
+function renderBilingualView() {
+  const content = document.getElementById('inline-view-content');
+  if (!content) return;
+
+  // Ensure sticky header exists
+  if (!content.querySelector('.bt-header')) {
+    const hdr = document.createElement('div');
+    hdr.className = 'bt-header';
+    hdr.innerHTML = `
+      <div class="bt-header-cell"></div>
+      <div class="bt-header-cell">中文</div>
+      <div class="bt-header-cell">English</div>
+      <div class="bt-header-cell"></div>`;
+    content.prepend(hdr);
+  }
+
+  // Remove stale rows
+  const currentIds = new Set(localRows.map(r => r.id));
+  content.querySelectorAll('.bt-row-edit').forEach(el => {
+    if (!currentIds.has(el.dataset.id)) el.remove();
+  });
+
+  // Remove all insert-zones and rebuild
+  content.querySelectorAll('.insert-zone').forEach(el => el.remove());
+
+  // Top insert zone (after header)
+  const hdr = content.querySelector('.bt-header');
+  hdr.insertAdjacentElement('afterend', createInsertZone(null));
+
+  // Add / update rows in order
+  localRows.forEach((row, idx) => {
+    let el = content.querySelector(`.bt-row-edit[data-id="${row.id}"]`);
+    if (!el) el = createBilingualRowElement(row);
+    el.querySelector('.bt-num').textContent = idx + 1;
+    const zhEl = el.querySelector('.zh-area');
+    const enEl = el.querySelector('.en-area');
+    if (document.activeElement !== zhEl) { zhEl.value = normalizePunct(row.zh || ''); autoResize(zhEl); }
+    if (document.activeElement !== enEl) { enEl.value = row.en || ''; autoResize(enEl); }
+    content.appendChild(el);
+    content.appendChild(createInsertZone(row.id));
+  });
+}
+
+function createBilingualRowElement(row) {
+  const el = document.createElement('div');
+  el.className = 'bt-row-edit';
+  el.dataset.id = row.id;
+  el.innerHTML = `
+    <div class="bt-num">1</div>
+    <div class="bt-zh-cell">
+      <textarea class="zh-area" placeholder="輸入中文句子…">${esc(normalizePunct(row.zh || ''))}</textarea>
+    </div>
+    <div class="bt-en-cell">
+      <textarea class="en-area" placeholder="Enter English sentence…">${esc(row.en || '')}</textarea>
+    </div>
+    <div class="bt-row-actions">
+      <button class="icon-btn" title="刪除" onclick="deleteRow('${row.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      </button>
+    </div>`;
+
+  const zhEl = el.querySelector('.zh-area');
+  const enEl = el.querySelector('.en-area');
+  zhEl.addEventListener('input', () => { autoResize(zhEl); onCellEdit(row.id, 'zh', zhEl.value); });
+  enEl.addEventListener('input', () => { autoResize(enEl); onCellEdit(row.id, 'en', enEl.value); });
+  zhEl.addEventListener('focus', () => el.classList.add('editing'));
+  enEl.addEventListener('focus', () => el.classList.add('editing'));
+  zhEl.addEventListener('blur',  () => el.classList.remove('editing'));
+  enEl.addEventListener('blur',  () => el.classList.remove('editing'));
+  zhEl.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); enEl.focus(); }
+  });
+  enEl.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); insertRow(row.id, 'after'); }
+    if (e.key === 'Tab' && e.shiftKey)  { e.preventDefault(); zhEl.focus(); }
+  });
+  requestAnimationFrame(() => { autoResize(zhEl); autoResize(enEl); });
+  return el;
 }
 
 function createInsertZone(afterId) {
@@ -1206,6 +1595,187 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ════════════════════════════════════════════
+// Scan Pages Image Viewer
+// ════════════════════════════════════════════
+const SCAN_TOTAL = 80;
+
+function renderScanContent() {
+  const content = document.getElementById('inline-view-content');
+  const imgs = [];
+  for (let i = 1; i <= SCAN_TOTAL; i++) {
+    const p = String(i).padStart(3, '0');
+    imgs.push(`
+      <div style="text-align:center;margin-bottom:8px;">
+        <span style="font-size:11px;color:var(--muted);">第 ${i} 頁</span>
+      </div>
+      <img src="./scan_pages/page_${p}.jpg"
+           alt="第${i}頁"
+           loading="lazy"
+           style="width:100%;max-width:860px;display:block;margin:0 auto 32px;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.15);">`);
+  }
+  content.innerHTML = `<div style="padding:16px 0 60px;">${imgs.join('')}</div>`;
+}
+
+// ════════════════════════════════════════════
+// Inline View
+// ════════════════════════════════════════════
+let currentInlineView = null;
+
+function toggleInlineView(view) {
+  if (currentInlineView === view) {
+    closeInlineView();
+  } else {
+    openInlineView(view);
+  }
+}
+
+function openInlineView(view) {
+  currentInlineView = view;
+
+  // Update toolbar button states
+  ['bilingual', 'zh', 'en', 'trash'].forEach(v => {
+    document.getElementById('btn-' + v).classList.toggle('primary', v === view);
+  });
+  const scanBtn = document.getElementById('btn-scan');
+  if (scanBtn) scanBtn.style.fontWeight = view === 'scan' ? '700' : '';
+
+  // Titles
+  const titles = { bilingual: '逐句翻譯', zh: '中文全文', en: '英文全文', trash: '刪除暫存區（保留一個月）', scan: '掃描文本' };
+  document.getElementById('inline-view-title').textContent = titles[view] || '';
+
+  // Populate content
+  const content = document.getElementById('inline-view-content');
+  if (view === 'bilingual') {
+    content.innerHTML = '';
+    renderBilingualView();
+  } else if (view === 'zh') {
+    content.innerHTML = buildFulltextHtml('zh');
+  } else if (view === 'en') {
+    content.innerHTML = buildFulltextHtml('en');
+  } else if (view === 'trash') {
+    renderTrashView();
+  } else if (view === 'scan') {
+    renderScanContent();
+  }
+
+  // Hide copy button for trash / bilingual / scan view
+  document.getElementById('inline-view-bar').querySelector('button.btn').style.display =
+    (view === 'trash' || view === 'bilingual' || view === 'scan') ? 'none' : '';
+
+  // Show inline view, hide editor
+  document.getElementById('inline-view').style.display = 'block';
+  document.getElementById('col-headers').style.display = 'none';
+  document.getElementById('sentences').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'none';
+}
+
+function closeInlineView() {
+  currentInlineView = null;
+  ['bilingual', 'zh', 'en', 'trash'].forEach(v => {
+    document.getElementById('btn-' + v).classList.remove('primary');
+  });
+  const scanBtn = document.getElementById('btn-scan');
+  if (scanBtn) scanBtn.style.fontWeight = '';
+  // Restore copy button
+  const bar = document.getElementById('inline-view-bar');
+  if (bar) bar.querySelector('button.btn').style.display = '';
+  document.getElementById('inline-view').style.display = 'none';
+  document.getElementById('col-headers').style.display = '';
+  document.getElementById('sentences').style.display = '';
+  renderAll();
+}
+
+// ════════════════════════════════════════════
+// Trash View
+// ════════════════════════════════════════════
+function renderTrashView() {
+  const content = document.getElementById('inline-view-content');
+  if (!content) return;
+  const items = Object.entries(localTrash)
+    .sort((a, b) => (b[1].deletedAt || 0) - (a[1].deletedAt || 0));
+
+  if (items.length === 0) {
+    content.innerHTML = `
+      <div style="text-align:center;padding:80px 20px;color:var(--muted);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" style="opacity:.3;margin-bottom:16px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        <p style="font-size:15px">垃圾桶是空的</p>
+      </div>`;
+    return;
+  }
+
+  const header = `<div class="bt-header" style="grid-template-columns:40px 1fr 1fr 100px;">
+    <div class="bt-header-cell"></div>
+    <div class="bt-header-cell">中文</div>
+    <div class="bt-header-cell">English</div>
+    <div class="bt-header-cell"></div>
+  </div>`;
+
+  const rows = items.map(([id, item], i) => {
+    const d = item.deletedAt ? new Date(item.deletedAt) : null;
+    const dateStr = d ? `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}` : '';
+    const ONE_MONTH = 30 * 24 * 60 * 60 * 1000;
+    const daysLeft = item.deletedAt ? Math.ceil((ONE_MONTH - (Date.now() - item.deletedAt)) / 86400000) : 30;
+    return `
+    <div class="trash-row">
+      <div class="trash-num">${i + 1}</div>
+      <div class="trash-zh">${esc(normalizePunct(item.zh || ''))}</div>
+      <div class="trash-en">${esc(item.en || '')}</div>
+      <div class="trash-actions">
+        <button class="restore-btn" onclick="restoreRow('${id}')">復原</button>
+        <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.4;">${dateStr}<br>剩 ${daysLeft} 天</div>
+        <button class="icon-btn" title="立即刪除" onclick="permanentDelete('${id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  content.innerHTML = header + rows;
+}
+
+function buildFulltextHtml(view) {
+  const frags = [];
+  localRows.forEach(r => {
+    const pageNum = localPageBreaks[r.id];
+    if (pageNum !== undefined) {
+      frags.push(`<div class="ft-page-sep"><span>第 ${pageNum} 頁</span></div>`);
+    }
+    const text = view === 'zh' ? normalizePunct(r.zh || '') : (r.en || '');
+    if (text.trim()) frags.push(`<p class="ft-para">${esc(text)}</p>`);
+  });
+  const id = view === 'zh' ? ' id="ft-zh-text"' : '';
+  return `<div class="ft-fulltext-block"${id}>${frags.join('')}</div>`;
+}
+
+function copyInlineView() {
+  let text = '';
+  if (currentInlineView === 'bilingual') {
+    text = localRows.map((r, i) =>
+      `${i + 1}. ${normalizePunct(r.zh || '')}\n   ${r.en || ''}`
+    ).join('\n\n');
+  } else if (currentInlineView === 'zh') {
+    const lines = [];
+    localRows.forEach(r => {
+      if (localPageBreaks[r.id]) lines.push(`\n── 第 ${localPageBreaks[r.id]} 頁 ──\n`);
+      const t = normalizePunct(r.zh || '');
+      if (t.trim()) lines.push(t);
+    });
+    text = lines.join('\n');
+  } else {
+    const lines = [];
+    localRows.forEach(r => {
+      if (localPageBreaks[r.id]) lines.push(`\n── Page ${localPageBreaks[r.id]} ──\n`);
+      const t = r.en || '';
+      if (t.trim()) lines.push(t);
+    });
+    text = lines.join('\n');
+  }
+  navigator.clipboard.writeText(text).then(() =>
+    showToast('✅ 已複製' + { bilingual:'逐句對照', zh:'中文全文', en:'英文全文' }[currentInlineView])
+  );
 }
 
 function esc(s) {
