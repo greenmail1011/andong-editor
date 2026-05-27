@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>中英對照編輯器</title>
+
+  <!-- Firebase SDKs (v9 compat mode) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --border: #e0e4ef;
+      --accent: #4f6ef7;
+      --accent-light: #eef0fd;
+      --danger: #e05260;
+      --text: #1a1d2e;
+      --muted: #8892a4;
+      --zh-bg: #fafbff;
+      --en-bg: #fffaf5;
+      --online: #22c55e;
+      --radius: 10px;
+      --cell-font-size: 15px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC",
+                   "Noto Sans TC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { font-weight: 700; font-size: 17px; letter-spacing: -0.3px; }
+    .logo span { color: var(--accent); }
+    .spacer { flex: 1; }
+    #doc-title-input {
+      border: none;
+      font-size: var(--cell-font-size);
+      font-weight: 600;
+      background: transparent;
+      color: var(--text);
+      text-align: center;
+      outline: none;
+      min-width: 160px;
+      max-width: 320px;
+    }
+    #doc-title-input::placeholder { color: var(--muted); }
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .dot.online { background: var(--online); }
+    #online-count { font-size: 12px; color: var(--muted); }
+
+    /* ── Setup overlay ── */
+    #setup-overlay {
+      position: fixed; inset: 0;
+      background: rgba(26,29,46,0.55);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #setup-box {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+    }
+    #setup-box h2 { font-size: 20px; margin-bottom: 6px; }
+    #setup-box p { color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.6; }
+    #setup-error { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
+
+    /* ── Toolbar ── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 14px;
+      font-size: 13.5px;
+      font-weight: 500;
+      background: var(--surface);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+    .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn.primary:hover { opacity: 0.88; background: var(--accent); color: #fff; }
+    .btn svg { width: 15px; height: 15px; }
+
+    /* ── Column headers ── */
+    #col-headers {
+      display: grid;
+      grid-template-columns: 48px 1fr 48px;
+      gap: 0;
+      padding: 0 24px;
+      margin-bottom: 2px;
+    }
+    .col-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 4px 16px;
+    }
+
+    /* ── Sentence list ── */
+    #sentences { padding: 0 24px 80px; }
+
+    .sentence-row {
+      display: grid;
+      grid-template-columns: 48px 1fr 48px;
+      gap: 0;
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+      position: relative;
+    }
+    .cell-stack {
+      display: flex;
+      flex-direction: column;
+    }
+    .sentence-row:hover { box-shadow: 0 2px 12px rgba(79,110,247,0.08); }
+    .sentence-row.editing { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,110,247,0.12); }
+    .sentence-row.remote-editing { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.12); }
+
+    .row-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      border-right: 1px solid var(--border);
+      user-select: none;
+      background: var(--bg);
+    }
+    .cell {
+      padding: 0;
+      position: relative;
+    }
+    .cell.zh {
+      background: var(--zh-bg);
+      border-bottom: 1px solid var(--border);
+    }
+    .cell.en { background: var(--en-bg); }
+    .cell textarea {
+      width: 100%;
+      min-height: 64px;
+      resize: none;
+      border: none;
+      outline: none;
+      padding: 12px 16px 12px 44px;
+      font-size: var(--cell-font-size);
+      line-height: 1.75;
+      font-family: inherit;
+      color: var(--text);
+      background: transparent;
+    }
+    .cell.zh textarea { font-family: "PingFang TC","Noto Serif TC","Source Han Serif TC",serif; }
+    .cell textarea::placeholder { color: #c0c7d8; }
+
+    .cell-lang {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      transform: translateY(-50%);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      pointer-events: none;
+      background: rgba(255,255,255,0.7);
+      border-radius: 4px;
+      padding: 2px 5px;
+      line-height: 1;
+    }
+    .remote-label {
+      position: absolute;
+      bottom: 4px; right: 8px;
+      font-size: 10px;
+      color: #f59e0b;
+      background: rgba(245,158,11,0.1);
+      border-radius: 4px;
+      padding: 1px 5px;
+      display: none;
+    }
+    .sentence-row.remote-editing .remote-label { display: block; }
+
+    .row-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px;
+      border-left: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .icon-btn {
+      width: 28px; height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+      color: var(--muted);
+      transition: background 0.15s, color 0.15s;
+    }
+    .icon-btn:hover { background: #fee2e2; color: var(--danger); }
+    .icon-btn.move:hover { background: #eff6ff; color: var(--accent); }
+
+    /* ── Insert zone (between rows) ── */
+    .insert-zone {
+      height: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: height 0.18s ease;
+    }
+    .insert-zone:hover { height: 40px; }
+    .insert-zone-btn {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 20px;
+      border: 1.5px dashed var(--accent);
+      border-radius: 8px;
+      background: var(--accent-light);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      width: 100%;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .insert-zone:hover .insert-zone-btn { display: flex; }
+    .insert-zone-btn:hover { background: #dde4fd; }
+    .icon-btn.move:hover { background: var(--accent-light); color: var(--accent); }
+    .icon-btn svg { width: 14px; height: 14px; }
+
+    /* ── Empty state ── */
+    #empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+      display: none;
+    }
+    #empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.3; }
+    #empty-state p { font-size: 15px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a1d2e;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+      z-index: 300;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Presence avatars ── */
+    #presence-area {
+      display: flex;
+      align-items: center;
+      gap: -6px;
+    }
+    .avatar {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 2px solid var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      margin-left: -6px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Connecting Overlay ══ -->
+<div id="setup-overlay">
+  <div id="setup-box" style="text-align:center;padding:48px 40px;">
+    <div style="font-size:36px;margin-bottom:16px">🔥</div>
+    <h2 style="margin-bottom:8px">正在連接資料庫…</h2>
+    <p style="color:var(--muted);font-size:14px">andong-editor · Firebase Realtime Database</p>
+    <div id="setup-step" style="margin-top:12px;color:#8892a4;font-size:12px">初始化中…</div>
+    <div id="setup-error" style="margin-top:16px;color:var(--danger);font-size:13px;display:none;white-space:pre-line;text-align:left;line-height:1.7"></div>
+    <button id="setup-retry" onclick="location.reload()" style="display:none;margin-top:16px;padding:8px 24px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-size:14px">重新整理</button>
+  </div>
+</div>
+
+<!-- ══ Header ══ -->
+<header>
+  <div class="logo">中<span>英</span>對照</div>
+  <input id="doc-title-input" placeholder="文件標題…" maxlength="60" />
+  <div class="spacer"></div>
+  <div id="presence-area"></div>
+  <div id="status-bar">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">未連線</span>
+  </div>
+</header>
+
+<!-- ══ Toolbar ══ -->
+<div id="toolbar">
+  <button class="btn primary" onclick="addRow()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    新增句子
+  </button>
+  <div style="flex:1"></div>
+  <div style="display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:8px;padding:4px 10px;background:var(--surface)">
+    <button onclick="changeFontSize(-1)" title="縮小字型" style="border:none;background:none;cursor:pointer;font-size:13px;color:var(--muted);padding:0 2px;line-height:1">A−</button>
+    <span id="font-size-label" style="font-size:12px;color:var(--muted);min-width:30px;text-align:center">15px</span>
+    <button onclick="changeFontSize(1)"  title="放大字型" style="border:none;background:none;cursor:pointer;font-size:16px;color:var(--text);padding:0 2px;line-height:1;font-weight:600">A+</button>
+  </div>
+  <button class="btn" onclick="reseedDatabase()" style="color:#7c3aed;border-color:#c4b5fd" title="刪除現有資料並重新載入禮節手冊全文（含中英對照）">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    重新初始化
+  </button>
+</div>
+
+<!-- ══ Column labels ══ -->
+<div id="col-headers">
+  <div></div>
+  <div class="col-label">中文 ↕ English</div>
+  <div></div>
+</div>
+
+<!-- ══ Sentence List ══ -->
+<div id="sentences"></div>
+<div id="empty-state">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="12" y1="9" x2="12" y2="21"/></svg>
+  <p>點擊「新增句子」開始建立中英對照</p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SEED_PAIRS = [
+  {zh: `前言師尊於《暫定佛規》序文云：「先王之道，以正心修身為本；聖人之教，以禮門義路為先。`, en: `Foreword — The Holy Teacher wrote in the preface of "Provisional Buddha Regulations": "The way of the ancient kings takes rectification of the mind and self-cultivation as the foundation; the teaching of the sages takes the gateway of propriety and the path of righteousness as the priority."`},
+  {zh: `」由此發展出生命虔誠的一貫道禮節，上可通達天命，下可安頓生命。`, en: `From this has developed the devout etiquette of I-Kuan Tao — reaching upward to comprehend the Heavenly Mandate, and grounding downward to anchor one's life.`},
+  {zh: `一貫道禮節其中蘊含著無限的天機與禪機，在舉手投足之間，無一不在照見本性，並從行禮當中，自內心深處發出最真誠、最虔敬的心，而與上天及諸佛菩薩的心相感應，在個己的生命中自然能流露生命的豐彩。`, en: `I-Kuan Tao etiquette contains boundless heavenly mysteries and spiritual insights. In every gesture and step, one's original nature is illuminated; through performing the rites, the most sincere and devout heart arises from deep within, resonating with Heaven and all Buddhas and Bodhisattvas, naturally allowing the richness of life to fully manifest.`},
+  {zh: `道場禮節、佛堂儀規是師尊老大人所制定，道親宜誠懇學習，深入體悟，方能將禮節很誠意、適當地表達出來，不離開禮節也不逾越儀規，從心所欲而不踰矩，始能至誠不息、通達自如。`, en: `The ceremonial etiquette of the Tao Center and the ritual regulations of the altar were established by the Holy Teacher. Fellow practitioners should study earnestly and internalize deeply, so as to express the etiquette sincerely and appropriately — neither departing from the rites nor exceeding the regulations — acting freely from the heart without transgressing the rules, and thus achieving unceasing sincerity and effortless mastery.`},
+  {zh: `為統一道場的禮節儀規，此次再將道場禮節手冊內容審慎釐定，並做部份修正，期能助益道親在行禮如儀當中，深解其意，又能將生命的真誠展露無遺，然而疏漏之處，在所難免，叩懇諸天仙佛慈悲赦罪，尚祈前賢大德指正，冀望藉由眾人之智慧，為一貫道禮節做最圓滿的整理，是所至盼。`, en: `In order to unify the ceremonial etiquette of the Tao Center, the content of this Etiquette Handbook has been carefully reviewed and partially revised. It is hoped that this will assist fellow practitioners in performing the rites as prescribed and understanding their deeper meaning, while fully expressing life's sincerity. Inevitable omissions are humbly submitted to all Immortals and Buddhas for compassionate forgiveness; the correction of virtuous senior elders is earnestly sought; and it is sincerely hoped that through collective wisdom, the most complete compilation of I-Kuan Tao etiquette may be achieved.`},
+  {zh: `宏宗聖堂道學院謹誌西元二○二○年（中華民國一○九年）元月一日修訂版
+【參辭駕禮】一、參辭駕禮（上禮）（下禮）作揖，跪明明上帝參（辭）駕五叩首一叩再叩…五叩首諸天神聖三叩首一叩再叩三叩首彌勒祖師三叩首一叩再叩三叩首南海古佛一叩首一叩活佛師尊一叩月慧菩薩一叩師尊一叩師母一叩點傳師一叩引保師一叩前賢大眾一叩首起，作揖參（辭）駕禮畢鞠躬（躬身而退）※註：（一）到佛堂參駕時，若前人及點傳師已在壇時，給前人參駕一叩首、點傳師參駕一叩首。`, en: `Respectfully recorded by Hongzong Sacred Hall Tao Academy — Revised Edition, January 1, 2020 (Republic of China Year 109). 【Greeting and Farewell Rites】 I. Greeting and Farewell Rites. (Upper Position)(Lower Position): Bow with clasped hands, kneel. Venerable Heaven — Greeting (Farewell) — 5 kowtows; All Heavenly Saints — 3 kowtows; Patriarch Maitreya — 3 kowtows; Ancient Buddha of the South Sea — 1 kowtow; Patriarch Ji-Gong — 1 kowtow; Yue Hui Bodhisattva — 1 kowtow; Holy Teacher — 1 kowtow; Holy Mother — 1 kowtow; Enlightening Teacher — 1 kowtow; Sponsoring Teacher — 1 kowtow; All Senior Fellow Practitioners — 1 kowtow. Rise, bow. Greeting (Farewell) Rite complete, bow respectfully and retreat. Note (1): When arriving at the altar to pay respects, if the Senior Elder and Enlightening Teacher are already present, offer them each 1 kowtow.`},
+  {zh: `（辭駕亦同）（二）若前人及點傳師來壇時，給前人接駕一叩首、點
+傳師接駕一叩首。`, en: `(The same applies when bidding farewell.) (2) When the Senior Elder and Enlightening Teacher arrive at the altar, offer them each 1 kowtow of welcome.`},
+  {zh: `（離壇時，送駕亦同）（三）凡道親隨駕前人、點傳師出入時，皆需再給前人、點傳師接送駕。`, en: `(The same applies when seeing them off upon departure.) (3) Whenever fellow practitioners accompany the Senior Elder or Enlightening Teacher in or out, they must again offer greeting and farewell kowtows.`},
+  {zh: `（四）道親參辭駕唸到「前賢大眾」時，在壇道親必以鞠躬還禮。`, en: `(4) When fellow practitioners recite 'All Senior Fellow Practitioners' during the Greeting and Farewell Rite, those present at the altar must respond with a standing bow.`},
+  {zh: `（五）到宏宗聖堂道學院、安東彌勒山及各分壇道務中心參辭駕禮至前賢大眾一叩首後要起，作揖、跪，各位老前人參駕三叩首，起，作揖、跪，前人一叩首，各位點傳師一叩首。`, en: `(5) When performing the Greeting and Farewell Rite at Hongzong Sacred Hall Tao Academy, Andong Maitreya Mountain, or branch altar Tao centers: after the 1 kowtow for 'All Senior Fellow Practitioners,' rise, bow with clasped hands, kneel, and offer 3 kowtows to each Venerable Senior Elder, then rise, bow with clasped hands, kneel, and offer 1 kowtow to the Senior Elder and 1 kowtow to each Enlightening Teacher.`},
+  {zh: `【早晚獻香禮】
+【獻香位置圖】三、獻香位置圖△家庭佛堂：平日五炷（一炷一炷獻），明明上帝代表。`, en: `【Morning and Evening Incense Offering Rite】 【Incense Placement Diagram】 III. Incense Placement Diagram. △ Home Altar: On regular days, offer 5 sticks (one stick at a time) — all representing the Venerable Heaven.`},
+  {zh: `初一、十五獻十二支全炷香。`, en: `On the 1st and 15th of the lunar month, offer 12 full sticks of incense.`},
+  {zh: `（明明上帝五炷、諸天神聖三炷、灶君一炷、師尊、師母三炷。`, en: `(Venerable Heaven — 5 sticks; All Heavenly Saints — 3 sticks; Kitchen God — 1 stick; Holy Teacher and Holy Mother — 3 sticks.)`},
+  {zh: `）△公共佛堂：平日十二支全炷香，初一、十五獻三十支全炷香（明明上帝五炷、諸天神聖三炷、彌勒祖師三炷、南海古佛三炷、五教聖人三炷、活佛師尊三炷、月慧菩薩三炷、各位法律主三炷、灶君一炷、師尊、師母三炷）。`, en: `△ Public Altar: On regular days, offer 12 full sticks; on the 1st and 15th, offer 30 full sticks (Venerable Heaven — 5; All Heavenly Saints — 3; Patriarch Maitreya — 3; Ancient Buddha of the South Sea — 3; Saints of the Five Religions — 3; Patriarch Ji-Gong — 3; Yue Hui Bodhisattva — 3; Dharma Masters — 3; Kitchen God — 1; Holy Teacher and Holy Mother — 3).`},
+  {zh: `△大把香：初一、十五、開班、祭典、感恩、求慈悲等行之。`, en: `△ Grand Bundle Incense: Offered on the 1st and 15th, initiation sessions, grand ceremonies, gratitude ceremonies, and Seeking Compassion rites.`},
+  {zh: `※註：安壇求慈悲，謝恩或大典等可依壇之大小、高低、安全而增獻香數量。`, en: `※ Note: For altar consecration, Seeking Compassion, thanksgiving, grand ceremonies, etc., the number of incense sticks may be increased according to the size, elevation, and safety conditions of the altar.`},
+  {zh: `（一）春季三月十五日（二）夏季六月十五日（三）秋季九月十五日（四）冬季十一月十五日皆以壽桃、壽麵等供果敬奉上天，並深自懺悔既往，策勵未來，做繼往開來的精進。`, en: `(1) Spring: 15th day of the 3rd lunar month; (2) Summer: 15th day of the 6th month; (3) Autumn: 15th day of the 9th month; (4) Winter: 15th day of the 11th month — on all these dates, longevity peaches, longevity noodles, and other offerings are reverently presented to Heaven, while sincerely repenting of the past and striving diligently toward the future.`},
+  {zh: `△順序：（一）點佛燈。`, en: `△ Sequence: (1) Light the Buddha lamp.`},
+  {zh: `（二）發爐。`, en: `(2) Ignite the incense burner.`},
+  {zh: `（三）獻供。`, en: `(3) Present the offerings.`},
+  {zh: `（四）請壇（不請壇時要先獻九五禮）。`, en: `(4) Invoke the altar (if not invoking, first perform the 9-5 Rite).`},
+  {zh: `13（五）燒香，惟第一次加獻大香。`, en: `(5) Offer incense; on the first time, additionally offer the Grand Incense.`},
+  {zh: `執禮方法如下：
+（上禮）（下禮）作揖，跪明明上帝初獻香禮三叩首一叩再叩三叩首起，跪亞獻香禮三叩首四叩五叩六叩首起，跪終獻香禮三叩首七叩八叩九叩首起，作揖，跪獻香禮五叩首一叩再叩…五叩首起，作揖，九五禮禮畢鞠躬【大典—早晚香禮】
+【獻茶】六、獻茶、獻供禮、供果獻置圖（一）平日獻茶禮△三人獻，或一、二人獻均無不可。`, en: `The method of performing the rites is as follows: (Upper Position)(Lower Position): Bow with clasped hands, kneel. Venerable Heaven — First Incense Offering — 3 kowtows (1st, 2nd, 3rd); rise, kneel — Second Incense Offering — 3 kowtows (4th, 5th, 6th); rise, kneel — Third Incense Offering — 3 kowtows (7th, 8th, 9th); rise, bow with clasped hands, kneel — Incense Offering — 5 kowtows; rise, bow. The 9-5 Rite is complete. Bow respectfully. 【Grand Ceremony — Morning/Evening Incense Rite】 【Tea Offering】 VI. Tea Offering, Ritual Offering, and Offering Arrangement Diagram. (1) Daily Tea Offering: May be performed by three persons, or by one or two persons.`},
+  {zh: `⊙獻茶一人獻時（獻供亦同）先將準備好之清、濁兩杯供茶置於下桌兩邊。`, en: `⊙ When one person offers tea (same for ritual offering): First, place the prepared cups of 'Upper Pure' and 'Lower Earthly' tea on both sides of the lower table.`},
+  {zh: `2先於上禮位置拜三叩首後，再前進就獻位、先獻「上清」茶後，作完揖，退行至左方。`, en: `First, bow 3 kowtows at the upper position, then advance to the offering position. Offer the 'Upper Pure' tea first, bow with clasped hands, and withdraw to the left.`},
+  {zh: `3至左方桌邊作揖，獻「下濁」茶後，歸至下禮位置，三叩首後，鞠躬禮畢即可。`, en: `Bow with clasped hands at the left side of the table, offer the 'Lower Earthly' tea, then return to the lower position. After 3 kowtows, bow respectfully — the rite is complete.`},
+  {zh: `⊙三人獻茶時（上禮）（下禮）兩邊排班，對面作揖就拜位作揖，跪，三叩首一叩…三叩首起，作揖前進就獻位作揖，獻（端茶者就中位）跪，舉眉齊作揖接，舉眉齊，誠敬奉獻上清下濁（茶）（端茶者起身退三步後轉身離開拜墊位）作揖，歸拜位（端茶者就中位）同作揖，跪，三叩首一叩…三叩首起，作揖，兩邊分班（端茶者倒退三步後轉身離開拜墊位）對面作揖，獻茶禮畢鞠躬
+（二）獻供禮獻供前，先獻供茶二杯，（一杯用開水，一杯用茶葉），再獻供。`, en: `⊙ When three persons offer tea: (Upper Position)(Lower Position): Form two lines, face each other and bow, proceed to the worship position, bow, kneel, 3 kowtows; rise, bow, advance to the offering position, bow, offer tea (the carrier stands in the center position), kneel, raise to brow level, bow in reception, raise to brow level, reverently present 'Upper Pure' and 'Lower Earthly' tea; (the carrier rises, takes three steps back, then turns and leaves the kneeling mat position), bow, return to worship position; (carrier at center) bow together, kneel, 3 kowtows; rise, bow, separate to two lines; (carrier takes three steps back, turns and leaves), face each other and bow — tea offering rite complete, bow respectfully.`},
+  {zh: `2燒結緣香由點傳師獻，若無點傳師時，則由在場前輩行之。`, en: `The affinity incense is offered by the Enlightening Teacher; if no Enlightening Teacher is present, the senior member in attendance shall perform it.`},
+  {zh: `3公共佛堂有擺置仙佛桌，獻供時，供果居中，左邊放供茶（茶葉）右邊放毛巾。`, en: `Public altars with a divine table: when presenting offerings, fruit is placed in the center, tea (loose tea) on the left, and a towel on the right.`},
+  {zh: `（左右皆同）⊙三人獻供時（上禮）（下禮）燒結緣香作揖，跪，獻香三炷一獻再獻三獻五叩首一叩…五叩首起，作揖燒結緣香禮畢鞠躬兩邊排班，對面作揖就拜位作揖，跪，三叩首一叩…三叩首起，作揖，前進就獻位作揖，獻（端者就中位）跪，舉眉齊作揖接，舉眉齊，誠敬奉獻上清下濁（茶）（端者起身退三步後轉身離開拜墊位）作揖，獻（端者就中位）跪，舉眉齊作揖接，舉眉齊，誠敬奉獻上首居中（以下類推）（第二列時下首居中）【獻供】
+【獻供】作揖，歸拜位（端者就中位）同作揖，跪，三叩首一叩…三叩首起，作揖，兩邊分班（端者倒退三步後轉身離開拜墊位）對面作揖，獻供禮畢鞠躬⊙五人獻供時（上禮）（下禮）燒結緣香作揖，跪，獻香三炷一獻再獻三獻五叩首一叩…五叩首起，作揖燒結緣香禮畢鞠躬兩邊排班，對面作揖就拜位作揖，跪，三叩首一叩…三叩首起，作揖，前進就獻位作揖，後二位跪作揖，三叩首一叩…三叩首獻，跪，舉眉齊（端人）接，舉眉齊，（後二位）作揖（前二位）（端者起身退三步後轉身離開拜墊位）接，舉眉齊，（前二位）一叩首（後二位）誠敬奉獻上清下濁（茶）作揖一叩首獻，跪，舉眉齊接，舉眉齊作揖
+接，舉眉齊一叩首誠敬奉獻上首居中（第二列時下首居中）作揖一叩首獻，跪，舉眉齊接，舉眉齊作揖接，舉眉齊一叩首誠敬奉獻（以下類推，獻完為止）作揖，三叩首一叩…三叩首起，作揖，歸拜位（端者就中位）同作揖，跪，三叩首一叩…三叩首起，作揖，兩邊分班（端者倒退三步後轉身離開拜墊位）對面作揖，獻供禮畢鞠躬※註：（一）凡獻供品不外水果、點心、糖果、乾果、素菜、素湯、饅頭、水餃等類，總之皆以鮮美潔淨為要。`, en: `(Same for both sides.) ⊙ When three persons present offerings: (Upper Position)(Lower Position): Light affinity incense, bow, kneel, offer 3 sticks of incense — 1st, 2nd, 3rd offering — 5 kowtows; rise, bow. Affinity incense rite complete, bow respectfully. Form two lines, face each other and bow, proceed to worship position, bow, kneel, 3 kowtows; rise, bow, advance to offering position, bow (carrier at center), kneel, raise to brow level, bow in reception, raise to brow level, reverently present: 'Upper Pure' and 'Lower Earthly' tea, then the main offering (upper row centered; second row lower-centered); return to worship position (carrier at center), bow together, kneel, 3 kowtows; rise, bow, separate to two lines (carrier takes three steps back, turns and leaves). Face each other and bow — offering rite complete, bow respectfully.`},
+  {zh: `如有相當人數可按次序排班而獻；如人數不足，即用捧茶法獻，祇要獻出誠敬莊嚴，不必拘執，活潑行之可也。`, en: `If there are sufficient persons, they may line up in order to present offerings; if insufficient, the carrying method may be used — as long as the presentation is sincere, reverent, and dignified, one need not be rigid and may proceed with flexibility.`},
+  {zh: `（二）供果：公共佛堂一列以上。`, en: `(2) Offering fruit: Public altars — one row or more.`},
+  {zh: `家庭佛堂一列。`, en: `Home altars — one row.`},
+  {zh: `大典或年節應二列以上。`, en: `Grand ceremonies or festival occasions — two or more rows.`},
+  {zh: `（三）如祖師或師尊、師母之聖誕及忌辰皆需獻供，加獻三拜九叩大香禮。`, en: `(3) For the holy birthdays and memorial days of the Patriarch, Holy Teacher, or Holy Mother, an offering must be presented, with the additional Three-Bow Nine-Kowtow Grand Incense Rite.`},
+  {zh: `修道者貴乎心誠，不在供品之豐菲。`, en: `For those who cultivate the Tao, sincerity of heart is paramount — not the abundance of the offerings.`},
+  {zh: `如家貧不比富貴之家易舉者，其表白當自有不同。`, en: `For those of modest means who cannot match the offerings of the wealthy, their expression of sincerity will naturally differ.`},
+  {zh: `若富貴而故具薄供者，則無所取矣。`, en: `But for those who are wealthy and yet deliberately offer meager presents, there is nothing to be commended.`},
+  {zh: `【獻供】
+【供果獻置圖】（三）供果獻置圖
+七、請壇禮及就拜位圖（一）請壇禮（上禮）（下禮）燒結緣香作揖，跪獻香五炷一獻再獻…五獻十叩首一叩…十叩首起，作揖，歸班兩邊肅立誠敬請壇（請壇人唸到「勿違特宣」）對面作揖，就拜位第一位、第二位、第三位第四位、第五、第六位作揖，跪初獻香三炷一獻再獻三獻三叩首一叩再叩三叩首起，跪亞獻香三炷四獻五獻六獻三叩首四叩五叩六叩首起，跪終獻香三炷七獻八獻九獻三叩首七叩八叩九叩首起，作揖，跪獻香五炷一獻…五獻五叩首一叩…五叩首【請壇禮】
+【請壇就拜位圖】起，作揖，兩邊分班第一位、第二位、第三位第四位、第五、第六位對面作揖，請壇禮畢鞠躬※註：執禮人員就執禮位置，一律不參加請壇站班為莊嚴。`, en: `【Offering Rite】 【Offering Arrangement Diagram】 (3) Offering Arrangement Diagram. VII. Altar Invocation Rite and Worship Position Diagram. (1) Altar Invocation Rite: (Upper Position)(Lower Position): Light affinity incense, bow, kneel — offer 5 sticks of incense (1st through 5th) — 10 kowtows; rise, bow, return to line. Stand solemnly on both sides, reverently invoke the altar (invocation reader recites until 'Do not violate this proclamation'), face each other and bow, proceed to worship positions — 1st, 2nd, 3rd position; 4th, 5th, 6th position — bow, kneel. First Incense Offering — 3 sticks (1st, 2nd, 3rd) — 3 kowtows; rise, kneel. Second Offering — 3 sticks (4th, 5th, 6th) — 3 kowtows; rise, kneel. Third Offering — 3 sticks (7th, 8th, 9th) — 3 kowtows; rise, bow, kneel. Incense offering — 5 sticks (1st through 5th) — 5 kowtows. Rise, bow, separate to two lines. Face each other and bow — invocation rite complete, bow respectfully. Note: Personnel performing the rite shall stand at their assigned positions and not join the invocation formation, so as to maintain dignity.`},
+  {zh: `2如臨時佛堂或在外開荒，人手不足不在此限。`, en: `This exception does not apply to temporary altars or pioneer outreach situations where personnel are insufficient.`},
+  {zh: `（二）請壇就拜位圖◎三人就位圖◎五人就位圖◎七人就位圖
+八、辦道禮（一）準備：安排整理佛堂、排大香、供果、表文、掛號、講道義、講三寶。`, en: `(2) Worship Position Diagrams: ◎ Three-Person Formation ◎ Five-Person Formation ◎ Seven-Person Formation. VIII. Initiation Ceremony Rite. (1) Preparation: Arrange and clean the altar room, set out Grand Incense, offering fruit, petition documents, registration, deliver Tao teachings and the Three Treasures.`},
+  {zh: `（二）獻供禮節：同前。`, en: `(2) Offering rite: same as above.`},
+  {zh: `（三）請壇禮節（上禮）（下禮）燒結緣香作揖，跪獻香五炷一獻再獻…五獻十叩首一叩…十叩首起，作揖，歸班兩邊肅立誠敬請壇（點傳師唸到「勿違特宣」）對面作揖，就拜位第一位、第二位、第三位第四位、第五、第六位作揖，跪初獻香三炷一獻再獻三獻三叩首一叩再叩三叩首起，跪亞獻香三炷四獻五獻六獻三叩首四叩五叩六叩首起，跪終獻香三炷七獻八獻九獻三叩首七叩八叩九叩首起，作揖，跪【辦道禮】
+【辦道禮】獻香五炷一獻…五獻五叩首一叩…五叩首◎跪讀三請（…蓮下）磕頭一叩首（…古佛）磕頭一叩首（…情）磕頭三叩首一叩…三叩首平心靜氣跪聽讀表（讀表畢）請焚表（焚表畢）磕頭十叩首一叩…十叩首起，作揖，兩邊分班第一位、第二位、第三位第四位、第五、第六位對面作揖，請壇禮畢鞠躬（四）點道請點傳師燒結緣香作揖，跪獻香五炷一獻再獻…五獻十叩首一叩…十叩首起，作揖◎請點傳師就點位◎引保立願請就位作揖，跪代表獻香三炷一獻再獻三獻三叩首一叩…三叩首抬頭看佛燈引保立願各報自己姓名（下禮領念）（請報出聲音來）請你們隨我唸
+虔心跪在明明上帝蓮下，今天願引願保，大眾（二位以下呼名）求發一大道，性理真傳，如若引入保入，左道旁門，誑哄人之錢財，以及所引所保，求道人身家不清白，品行不端正者，願受天人共鑑。`, en: `(3) Altar Invocation Rite (Upper)(Lower): Light affinity incense, bow, kneel — 5 sticks of incense (1st through 5th) — 10 kowtows; rise, bow, return to line. Stand solemnly, reverently invoke the altar (Enlightening Teacher recites until 'Do not violate this proclamation'), face each other and bow, proceed to worship positions. First, Second, Third position; Fourth, Fifth, Sixth position — bow, kneel. First Incense — 3 sticks (1st–3rd) — 3 kowtows; rise, kneel. Second Incense — 3 sticks (4th–6th) — 3 kowtows; rise, kneel. Third Incense — 3 sticks (7th–9th) — 3 kowtows; rise, bow, kneel. Incense offering — 5 sticks — 5 kowtows. (Kneel and recite the Three Invitations: ...Lotus Throne — 1 kowtow; ...Ancient Buddha — 1 kowtow; ...compassion — 3 kowtows.) Calmly kneel and listen to the petition reading. (After reading) request to burn the petition. (After burning) 10 kowtows. Rise, bow, separate to lines. Face each other and bow — invocation rite complete, bow respectfully.`},
+  {zh: `（唸畢）磕頭三叩首一叩…三叩首起，作揖引保立願禮畢鞠躬◎求道人就位（）敬聽點傳師慈悲（因時間關係，亦可免）作揖，跪代表獻香三炷一獻…三獻（一位時只稱獻香）三叩首一叩…三叩首（）抬頭看佛燈，敬請點傳師傳你古合同磕頭三叩首一叩…三叩首（）抬頭看佛燈，敬聽禮囑【辦道禮】
+【辦道禮】磕頭三叩首一叩…三叩首（）抬頭看佛燈，再聽禮囑（坤免）磕頭三叩首一叩…三叩首（）抬頭看佛燈求道人立願各報自己姓名（請報出聲音來）（下禮領念）請你們隨我唸虔心跪在明明上帝蓮下，今天願求發一大道，性理真傳，求得之後，誠心抱守，實心懺悔（乾）。`, en: `(After recitation) kowtow — 3 kowtows; rise, bow. Sponsoring Teacher Vow Rite complete, bow respectfully. ◎ Seekers of the Tao proceed to position. (1) Reverently listen to the Enlightening Teacher's compassionate words (may be omitted due to time). Bow, kneel — representative offers 3 sticks of incense (1st–3rd offering) — 3 kowtows; (2) raise head to look at the Buddha lamp, reverently listen to the instructional words — 3 kowtows; (3) raise head to look at the Buddha lamp, await the transmission of the mystery point — 3 kowtows; (4) raise head to look at the Buddha lamp, reverently request the Enlightening Teacher to transmit the secret word — 3 kowtows.`},
+  {zh: `實心修煉（坤）。`, en: `Cultivate sincerely (for female practitioners, Kun).`},
+  {zh: `如有：虛心假意，退縮不前，欺師滅祖，藐視前人，不遵佛規，洩漏天機，匿道不現，不量力而為者（乾），不實心修煉者（坤），願受天人共鑑。`, en: `If any seeker is: insincere and deceitful, faint-hearted and retreating, betraying the teacher and ancestors, disrespecting senior elders, disobeying the Buddha Regulations, leaking the Heavenly Secrets, hiding the Tao without manifesting it, or acting beyond one's capacity (for male practitioners, Qian); or not sincerely cultivating (for female practitioners, Kun) — may Heaven and humanity both witness and judge.`},
+  {zh: `（唸畢）磕頭三叩首一叩…三叩首
+（）抬頭看佛燈，再聽禮囑磕頭三叩首一叩…三叩首（）抬頭看佛燈，敬候點玄磕頭三叩首一叩…三叩首（）抬頭看佛燈，敬請點傳師傳你口訣磕頭三叩首一叩…三叩首再磕三叩，謝謝老降道之恩一叩再叩三叩首諸天神聖一叩首一叩彌勒祖師一叩南海古佛一叩活佛師尊一叩月慧菩薩一叩師尊一叩師母一叩點傳師一叩引保師一叩前賢大眾一叩首起，作揖求道禮畢鞠躬【辦道禮】
+【超拔禮】九、超拔禮（接陽事）（上禮）（下禮）◎超拔人就位作揖，跪獻香五炷一獻…五獻十叩首一叩…十叩首平心靜氣跪聽禮囑（即刻隨旨到壇）三叩首一叩…三叩首抬頭看佛燈呼籤某某之亡○某某遵命隨旨赴壇聽點頂籤（畢）平心靜氣跪聽禮囑（各聽指示受差遣）焚籤雙手取籤焚之（焚畢）十叩首一叩再叩…十叩首謝謝明明上帝十叩首一叩再叩…十叩首起，作揖，跪謝謝諸天神聖五叩首一叩…五叩首謝謝彌勒祖師五叩首一叩…五叩首謝謝南海古佛五叩首一叩…五叩首謝謝活佛師尊五叩首一叩…五叩首
+謝謝月慧菩薩五叩首一叩…五叩首謝謝各位法律主五叩首一叩…五叩首謝謝東嶽大帝五叩首一叩…五叩首謝謝地藏古佛五叩首一叩…五叩首謝謝十殿閻君五叩首一叩…五叩首謝謝灶君三叩首一叩…三叩首謝謝師尊三叩首一叩…三叩首謝謝師母三叩首一叩…三叩首謝謝鎮殿元帥三叩首一叩…三叩首謝謝鎮殿將軍三叩首一叩…三叩首謝謝教化菩薩三叩首一叩…三叩首謝謝各位大仙三叩首一叩…三叩首謝謝各位老前人一叩首一叩謝謝前人一叩謝謝點傳師一叩謝謝引保師一叩謝謝前賢大眾一叩首起，作揖超拔禮畢鞠躬【超拔禮】
+【安壇禮】十、安壇禮△順序：（一）淨壇（約十分鐘後點佛燈）（二）點佛燈、發爐（三）獻供（請參閱第頁）（四）請壇（請參閱第頁）（五）安位（長香與大香）（六）壇主謝恩（請參閱第頁）⊙安位（上禮）（下禮）作揖，跪獻香全炷全獻獻香禮十叩首一叩…十叩首起，作揖，跪獻香五炷一獻…五獻明明上帝安位十叩首一叩…十叩首獻香三炷一獻…三獻諸天神聖安位五叩首一叩…五叩首起，作揖，安位禮畢鞠躬⊙道喜（上禮）（下禮）作揖，跪獻香全炷全獻
+明明上帝道喜十叩首一叩再叩…十叩首起，作揖，跪天地君親師道喜五叩首一叩…五叩首諸天神聖道喜五叩首一叩…五叩首彌勒祖師道喜五叩首一叩…五叩首南海古佛道喜五叩首一叩…五叩首五教聖人道喜五叩首一叩…五叩首活佛師尊道喜五叩首一叩…五叩首月慧菩薩道喜五叩首一叩…五叩首各位法律主道喜五叩首一叩…五叩首長生大帝道喜五叩首一叩…五叩首灶君道喜三叩首一叩…三叩首師尊道喜三叩首一叩…三叩首師母道喜三叩首一叩…三叩首鎮殿元帥道喜三叩首一叩…三叩首鎮殿將軍道喜三叩首一叩…三叩首教化菩薩道喜三叩首一叩…三叩首各位大仙道喜三叩首一叩…三叩首起，作揖，跪金公祖師道喜五叩首一叩…五叩首天然古佛道喜五叩首一叩…五叩首中華聖母道喜五叩首一叩…五叩首院長大人道喜三叩首一叩…三叩首起，作揖，跪圓德聖帝道喜三叩首一叩…三叩首教化天尊道喜三叩首一叩…三叩首厚德大帝道喜三叩首一叩…三叩首【道喜】
+【壇主謝恩】精勤金仙道喜三叩首一叩…三叩首各位成道前賢點傳師道喜一叩首一叩首起，作揖，跪前人道喜一叩首一叩點傳師道喜一叩首起，作揖道喜禮畢鞠躬⊙壇主謝恩（上禮）（下禮）請○壇主（就拜位）恭請（前人）點傳師訓示作揖，跪明明上帝獻香五炷一獻…五獻諸天神聖獻香三炷一獻…三獻灶君獻香一炷一獻師尊師母獻香三炷一獻…三獻謝謝明明上帝慈悲十叩首一叩…十叩首起，作揖，跪（以下類推與道喜禮節同）謝恩禮畢鞠躬（大家向壇主道喜）
+十一、謝恩及道喜禮節（上禮）（下禮）作揖，跪獻香全炷全獻謝謝明明上帝慈悲十叩首一叩再叩…十叩首起，作揖，跪謝謝天地君親師慈悲五叩首一叩再叩…五叩首△以下與拜節禮同（略錄）惟道喜與謝恩禮非特殊因緣，平時不加獻大把香。`, en: `(After recitation) kowtow — 3 kowtows. (Step 6) Raise head to look at the Buddha lamp, listen again to the instructional words — 3 kowtows. (Step 7) Raise head to look at the Buddha lamp, await the Mystery Point — 3 kowtows. (Step 8) Raise head to look at the Buddha lamp, reverently request the Enlightening Teacher to transmit the Oral Secret to you.`},
+  {zh: `△道喜禮於佛號下加「道喜」兩字即可。`, en: `For the Congratulating the Tao Rite, simply add the words 'Dao Xi' (Congratulations on the Tao) after the divine title.`},
+  {zh: `求慈悲禮、拜節禮、拜年禮亦同。`, en: `The same applies to the Seeking Compassion Rite, the Festival Worship Rite, and the New Year Greeting Rite.`},
+  {zh: `【謝恩及道喜】
+【亡靈結緣禮】十二、亡靈結緣禮△順序：（一）獻供（略錄）由結緣本人端供（二）讀表（三）求慈悲（四）上壇（五）謝恩（上禮）（下禮）◎結緣人請就位作揖，跪，獻香三炷一獻…三獻五叩首一叩再叩…五叩首請讀表（本人自讀，不識字者下禮領唸）（讀表畢）請焚表（焚表畢）十叩首一叩再叩…十叩首起，作揖，跪求明明上帝慈悲十叩首一叩再叩…十叩首求天地君親師慈悲五叩首一叩…五叩首求諸天神聖慈悲五叩首一叩…五叩首求彌勒祖師慈悲五叩首一叩…五叩首求南海古佛慈悲五叩首一叩…五叩首求五教聖人慈悲五叩首一叩…五叩首求活佛師尊慈悲五叩首一叩…五叩首求月慧菩薩慈悲五叩首一叩…五叩首
+求各位法律主慈悲五叩首一叩…五叩首求長生大帝慈悲五叩首一叩…五叩首求東嶽大帝慈悲五叩首一叩…五叩首求地藏古佛慈悲五叩首一叩…五叩首求灶君慈悲三叩首一叩…三叩首求師尊慈悲三叩首一叩…三叩首求師母慈悲三叩首一叩…三叩首求鎮殿元帥慈悲三叩首一叩…三叩首求鎮殿將軍慈悲三叩首一叩…三叩首求教化菩薩慈悲三叩首一叩…三叩首求各位大仙慈悲三叩首一叩…三叩首求各位老前人慈悲三叩首一叩…三叩首求前人慈悲一叩首一叩求點傳師慈悲一叩求引保師慈悲一叩求前賢大眾慈悲一叩首起，作揖求慈悲禮畢鞠躬◎上壇（結緣人恭候指示）◎謝恩禮外，加謝謝三才一叩首一叩謝謝前賢大眾一叩首起，作揖謝恩禮畢鞠躬【亡靈結緣禮】
+【拜節禮】十三、拜節禮△三節：（一）元宵節（正月十五日）（二）端午節（五月初五日）（三）中秋節（八月十五日）△順序：（一）點佛燈（二）發爐（三）獻供（四）請壇（五）早、午、晚香（六）拜節△早、午、晚香皆以初一、十五禮。`, en: `【Thanksgiving and Congratulating the Tao】 【Deceased Spirit Affinity Rite】 XII. Deceased Spirit Affinity Rite. △ Sequence: (1) Present offerings (abbreviated) — the person seeking affinity carries the offerings; (2) Read the petition; (3) Seek compassion; (4) Present to the altar; (5) Give thanks. (Upper)(Lower): ◎ Person seeking affinity proceeds to position — bow, kneel, offer 3 sticks of incense (1st–3rd) — 5 kowtows; request petition reading (read by oneself; if illiterate, led by the lower position leader). (After reading) request to burn the petition. (After burning) 10 kowtows; rise, bow, kneel. Seek compassion of the Venerable Heaven — 10 kowtows; seek compassion of Heaven, Earth, Sovereign, Parents, and Teacher — 5 kowtows; seek compassion of All Heavenly Saints — 5 kowtows; seek compassion of Patriarch Maitreya — 5 kowtows; seek compassion of the Ancient Buddha of the South Sea — 5 kowtows; seek compassion of the Saints of the Five Religions — 5 kowtows; seek compassion of Patriarch Ji-Gong — 5 kowtows; seek compassion of Yue Hui Bodhisattva — 5 kowtows; seek compassion of all Dharma Masters — 5 kowtows; … seek compassion of All Senior Fellow Practitioners — 1 kowtow; rise, bow. Seeking Compassion Rite complete, bow respectfully.`},
+  {zh: `38⊙拜節禮（獻供、請壇、獻香禮略錄）（上禮）（下禮）作揖，跪獻香全炷全獻獻香禮十叩首一叩…十叩首起，作揖，跪獻香五炷一獻…五獻明明上帝拜節十叩首一叩再叩…十叩首起，作揖，跪天地君親師拜節五叩首一叩…五叩首
+諸天神聖拜節五叩首一叩…五叩首彌勒祖師拜節五叩首一叩…五叩首南海古佛拜節五叩首一叩…五叩首五教聖人拜節五叩首一叩…五叩首活佛師尊拜節五叩首一叩…五叩首月慧菩薩拜節五叩首一叩…五叩首各位法律主拜節五叩首一叩…五叩首長生大帝拜節五叩首一叩…五叩首灶君拜節三叩首一叩…三叩首師尊拜節三叩首一叩…三叩首師母拜節三叩首一叩…三叩首鎮殿元帥拜節三叩首一叩…三叩首鎮殿將軍拜節三叩首一叩…三叩首教化菩薩拜節三叩首一叩…三叩首各位大仙拜節三叩首一叩…三叩首起，作揖，跪金公祖師拜節五叩首一叩…五叩首天然古佛拜節五叩首一叩…五叩首中華聖母拜節五叩首一叩…五叩首院長大人拜節三叩首一叩…三叩首起，作揖，跪圓德聖帝拜節三叩首一叩…三叩首教化天尊拜節三叩首一叩…三叩首【拜節禮】
+【拜節禮】厚德大帝拜節三叩首一叩…三叩首精勤金仙拜節三叩首一叩…三叩首各位成道前賢點傳師拜節一叩首一叩首起，作揖，跪前人拜節一叩首一叩點傳師拜節一叩首起，作揖拜節禮畢鞠躬
+十四、辭歲禮△除夕晚餐前燒晚香（初一、十五燒香禮）。`, en: `⊙ Festival Worship Rite (offering and invocation rites abbreviated): (Upper)(Lower): Bow, kneel — full incense offering — 10 kowtows; rise, bow, kneel — 5 sticks of incense (1st–5th) — Venerable Heaven Festival Worship — 10 kowtows; rise, bow, kneel — Heaven, Earth, Sovereign, Parents, Teacher — Festival Worship — 5 kowtows; All Heavenly Saints — Festival Worship — 5 kowtows; Patriarch Maitreya — Festival Worship — 5 kowtows; Ancient Buddha of the South Sea — Festival Worship — 5 kowtows; Saints of Five Religions — 5 kowtows; Patriarch Ji-Gong — 5 kowtows; Yue Hui Bodhisattva — 5 kowtows; Dharma Masters — 5 kowtows; ... Senior Elder — 1 kowtow; Enlightening Teachers — 1 kowtow; Altar Master — 1 kowtow; All Senior Fellow Practitioners — 1 kowtow; rise, bow. Festival Worship Rite complete, bow respectfully.`},
+  {zh: `△晚間九點後辭歲，順序為：（一）點佛燈（二）發爐（三）獻供（四）請壇（五）辭歲⊙辭歲（上禮）（下禮）（獻供、請壇禮略錄）作揖，跪獻香全炷全獻獻香禮十叩首一叩…十叩首起，作揖，跪獻香五炷一獻…五獻明明上帝辭歲十叩首一叩再叩…十叩首起，作揖，跪天地君親師辭歲九叩首一叩…九叩首起，作揖，跪諸天神聖辭歲九叩首一叩…九叩首起，作揖，跪【辭歲禮】
+【辭歲禮】彌勒祖師辭歲九叩首一叩…九叩首起，作揖，跪南海古佛辭歲五叩首一叩…五叩首五教聖人辭歲五叩首一叩…五叩首活佛師尊辭歲五叩首一叩…五叩首月慧菩薩辭歲五叩首一叩…五叩首各位法律主辭歲五叩首一叩…五叩首長生大帝辭歲五叩首一叩…五叩首起，作揖，跪東嶽大帝辭歲五叩首一叩…五叩首地藏古佛辭歲五叩首一叩…五叩首中天玉皇辭歲五叩首一叩…五叩首地宮老母辭歲五叩首一叩…五叩首起，作揖，跪灶君辭歲三叩首一叩…三叩首師尊辭歲三叩首一叩…三叩首師母辭歲三叩首一叩…三叩首鎮殿元帥辭歲三叩首一叩…三叩首鎮殿將軍辭歲三叩首一叩…三叩首教化菩薩辭歲三叩首一叩…三叩首各位大仙辭歲三叩首一叩…三叩首起，作揖，跪
+金公祖師辭歲九叩首一叩…九叩首天然古佛辭歲五叩首一叩…五叩首中華聖母辭歲五叩首一叩…五叩首院長大人辭歲三叩首一叩…三叩首起，作揖，跪圓德聖帝辭歲三叩首一叩…三叩首教化天尊辭歲三叩首一叩…三叩首厚德大帝辭歲三叩首一叩…三叩首精勤金仙辭歲三叩首一叩…三叩首各位成道前賢點傳師辭歲一叩首一叩首起，作揖，跪前人辭歲一叩首一叩各位點傳師辭歲一叩壇主辭歲一叩前賢大眾辭歲一叩首起，作揖，辭歲禮畢鞠躬※註：（一）辭歲禮後，長燈、長香五炷，公共佛堂至初三晚香止，家庭佛堂至初二晚香止，然後送駕。`, en: `After 9 p.m., perform the Year-End Ceremony. Sequence: (1) Light the Buddha lamp; (2) Ignite the incense burner; (3) Present offerings; (4) Invoke the altar; (5) Perform the Year-End Ceremony. ⊙ Year-End Ceremony (Upper)(Lower) (offering and invocation abbreviated): Bow, kneel — full incense offering — 10 kowtows; rise, bow, kneel — 5 sticks of incense — Venerable Heaven Year-End — 10 kowtows; rise, bow, kneel — Heaven, Earth, Sovereign, Parents, Teacher Year-End — 9 kowtows; … Patriarch Maitreya Year-End — 9 kowtows; Ancient Buddha Year-End — 5 kowtows; … Kitchen God Year-End — 3 kowtows; … Holy Teacher Year-End — 3 kowtows; … All Senior Fellow Practitioners Year-End — 1 kowtow; rise, bow. Year-End Ceremony complete, bow respectfully. Note (1): After the Year-End Ceremony, keep long lamps and five sticks of long incense burning — public altars until the evening incense on the 3rd; home altars until the evening incense on the 2nd — then bid farewell to the spiritual presences.`},
+  {zh: `【辭歲禮】
+【辭歲禮】（二）長香禮：長香作揖，跪獻香一炷一獻明明上帝十叩首一叩…十叩首諸天神聖五叩首一叩…五叩首起，作揖，長香禮畢鞠躬（三）此三天（或二天）早晚香均以初一、十五禮。`, en: `【Year-End Ceremony】 (2) Long Incense Rite: For long incense — bow with clasped hands, kneel — offer 1 stick of incense — Venerable Heaven — 10 kowtows; All Heavenly Saints — 5 kowtows; rise, bow with clasped hands. Long Incense Rite complete, bow respectfully. (3) During these three (or two) days, both morning and evening incense follow the 1st and 15th rite.`},
+  {zh: `（四）供果可常換新。`, en: `(4) Offering fruit may be refreshed frequently.`},
+  {zh: `十五、拜年禮△拜年在子時或吉時拜年開正，順序為：（一）獻供（二）拜年（三）拜早香（四）彌勒祖師祝壽禮（正月初一）△到各佛堂拜年，先參駕後明明上帝拜年十叩首一叩…十叩首諸天神聖拜年五叩首一叩…五叩首起，作揖，跪各位老前人拜年三叩首一叩…三叩首前人拜年一叩首一叩各位點傳師拜年一叩壇主拜年一叩前賢大眾拜年一叩首起，作揖，拜年禮畢鞠躬（點傳師以抱合同手禮給壇辦道親賀年，免行跪拜禮）（一）獻供禮略錄（二）拜年禮（上禮）（下禮）獻香全炷全獻獻香禮十叩首一叩…十叩首起，作揖，跪【拜年禮】
+【拜年禮】初獻香三炷一獻再獻三獻三叩首一叩再叩三叩首起，跪亞獻香三炷四獻五獻六獻三叩首四叩五叩六叩首起，跪終獻香三炷七獻八獻九獻三叩首七叩八叩九叩首起，作揖，跪獻香五炷一獻…五獻五叩首一叩…五叩首起，作揖，跪獻香五炷一獻…五獻明明上帝拜年十叩首一叩…十叩首起，作揖，跪天地君親師拜年九叩首一叩…九叩首起，作揖，跪諸天神聖拜年九叩首一叩…九叩首起，作揖，跪彌勒祖師拜年九叩首一叩…九叩首起，作揖，跪南海古佛拜年五叩首一叩…五叩首五教聖人拜年五叩首一叩…五叩首活佛師尊拜年五叩首一叩…五叩首
+月慧菩薩拜年五叩首一叩…五叩首各位法律主拜年五叩首一叩…五叩首長生大帝拜年五叩首一叩…五叩首起，作揖，跪東嶽大帝拜年五叩首一叩…五叩首地藏古佛拜年五叩首一叩…五叩首中天玉皇拜年五叩首一叩…五叩首地宮老母拜年五叩首一叩…五叩首起，作揖，跪灶君拜年三叩首一叩…三叩首師尊拜年三叩首一叩…三叩首師母拜年三叩首一叩…三叩首鎮殿元帥拜年三叩首一叩…三叩首鎮殿將軍拜年三叩首一叩…三叩首教化菩薩拜年三叩首一叩…三叩首各位大仙拜年三叩首一叩…三叩首起，作揖，跪金公祖師拜年九叩首一叩…九叩首天然古佛拜年五叩首一叩…五叩首中華聖母拜年五叩首一叩…五叩首院長大人拜年三叩首一叩…三叩首起，作揖，跪【拜年禮】
+【彌勒祖師拜壽】圓德聖帝拜年三叩首一叩…三叩首教化天尊拜年三叩首一叩…三叩首厚德大帝拜年三叩首一叩…三叩首精勤金仙拜年三叩首一叩…三叩首各位成道前賢點傳師拜年一叩首一叩首起，作揖，跪前人拜年一叩首一叩各位點傳師拜年一叩壇主拜年一叩前賢大眾拜年一叩首起，作揖，拜年禮畢鞠躬（三）彌勒祖師拜壽（上禮）（下禮）作揖，跪祖師拜壽初獻香三炷一獻再獻三獻三叩首一叩再叩三叩首起，跪祖師拜壽亞獻香三炷四獻五獻六獻三叩首四叩五叩六叩首起，跪祖師拜壽終獻香三炷七獻八獻九獻三叩首七叩八叩九叩首
+起，作揖祝壽禮畢鞠躬※註：正月初一禮另獻大香（與拜年不同時舉行者，應加獻全炷香）。`, en: `XV. New Year Greeting Ceremony. △ The New Year greeting is performed at midnight (Zi hour) or at an auspicious time. Sequence: (1) Present offerings; (2) New Year greeting; (3) Morning incense; (4) Birthday Celebration Rite for Patriarch Maitreya (on the 1st day of the 1st lunar month). △ When visiting various altars for the New Year greeting, first pay respects, then: Venerable Heaven New Year Greeting — 10 kowtows; All Heavenly Saints — 5 kowtows; rise, bow, kneel — Venerable Senior Elders New Year Greeting — 3 kowtows; Senior Elder — 1 kowtow; Enlightening Teachers — 1 kowtow; Altar Master — 1 kowtow; All Senior Fellow Practitioners — 1 kowtow; rise, bow. New Year Greeting Rite complete, bow respectfully. (Enlightening Teachers give New Year greetings to altar managers with the clasped-hands salute, without the kneeling rite.)`},
+  {zh: `坤道後拜時亦需給祖師三拜九叩禮拜壽。`, en: `Female practitioners, when offering the later bow, must also perform the Three-Bow Nine-Kowtow Birthday Celebration Rite for the Patriarch.`},
+  {zh: `49【彌勒祖師拜壽】
+【因事求慈悲】十六、因事求慈悲（上禮）（下禮）作揖，跪獻香全炷全獻求明明上帝慈悲一千叩首一叩再叩…千叩首起，作揖，跪求諸天神聖慈悲五百叩首一叩…五百叩首起，作揖，跪求彌勒祖師慈悲五百叩首一叩…五百叩首起，作揖，跪求南海古佛慈悲五百叩首一叩…五百叩首起，作揖，跪求五教聖人慈悲五百叩首一叩…五百叩首起，作揖，跪求活佛師尊慈悲五百叩首一叩…五百叩首起，作揖，跪求月慧菩薩慈悲五百叩首一叩…五百叩首起，作揖，跪求各位法律主慈悲五百叩首一叩…五百叩首起，作揖，跪求院長大人慈悲一百叩首一叩…一百叩首起，作揖，跪求各位大仙慈悲一百叩首一叩…一百叩首起，作揖求慈悲禮畢鞠躬
+十七、佛誕（各壇皆應誠敬舉行）△順序：（一）獻供（二）燒香（三）拜壽△彌勒祖師萬壽、金公祖師、師尊、師母聖誕與成道日均獻大香行三拜九叩禮。`, en: `【Birthday Celebration Rite for Patriarch Maitreya】 【Seeking Compassion for Special Matters】 XVI. Seeking Compassion for Special Matters. (Upper)(Lower): Bow, kneel — full incense offering — seek compassion of the Venerable Heaven — 1,000 kowtows; rise, bow, kneel — seek compassion of All Heavenly Saints — 500 kowtows; rise, bow, kneel — seek compassion of Patriarch Maitreya — 500 kowtows; … Altar Superintendent — 100 kowtows; All Immortals — 100 kowtows; rise, bow. Seeking Compassion Rite complete, bow respectfully.`},
+  {zh: `其餘皆行叩首禮。`, en: `All other observances follow the kowtow rite.`},
+  {zh: `（一）農曆正月初一日─彌勒祖師萬壽（三拜九叩首）（二）農曆二月初二日─金公祖師成道（三拜九叩首）（三）農曆二月十五日─太上老君聖誕（五叩首）（四）農曆二月十九日─南海古佛聖誕（五叩首）（五）農曆二月廿三日─恩師母成道（三拜九叩首）（六）農曆四月初八日─釋迦牟尼佛聖誕（五叩首）（七）農曆四月廿四日─金公祖師聖誕（三拜九叩首）（八）國曆五月一日─厚德大帝成道（三叩首）（九）農曆六月廿四日─關法律主聖誕（五叩首）（十）農曆七月十九日─恩師尊聖誕（三拜九叩首）（十一）農曆七月三十日─地藏古佛聖誕（五叩首）（十二）農曆八月初二日─精勤金仙成道（三叩首）（十三）農曆八月初三日─灶君聖誕（三叩首）（十四）農曆八月十五日─恩師尊成道（三拜九叩首）（十五）農曆八月廿八日─恩師母聖誕（三拜九叩首）（十六）農曆九月初七日─精勤金仙聖誕（三叩首）（十七）國曆九月廿八日─孔子聖誕（五叩首）（十八）農曆十月廿七日─厚德大帝聖誕（三叩首）【佛誕】
+【跪讀愿懺文】十八、跪讀愿懺文（一）愿懺文的意義一貫道道親每天主要的功課，便是早（午）晚二（三）次的獻香禮，獻香禮中最重要的部份，便是愿懺文。`, en: `(1) 1st day of the 1st lunar month — Patriarch Maitreya's Birthday (Three bows, nine kowtows); (2) 2nd day of the 2nd lunar month — Patriarch Jin-Gong's Enlightenment Day (Three bows, nine kowtows); (3) 15th day of the 2nd month — Supreme Lord Lao-Zi's Birthday (5 kowtows); (4) 19th day of the 2nd month — Ancient Buddha of the South Sea's Birthday (5 kowtows); (5) 23rd day of the 2nd month — Holy Mother's Enlightenment Day (Three bows, nine kowtows); (6) 8th day of the 4th month — Shakyamuni Buddha's Birthday (5 kowtows); (7) 24th day of the 4th month — Patriarch Jin-Gong's Birthday (Three bows, nine kowtows); (8) May 1st (Gregorian) — Venerable Lord of Great Virtue's Enlightenment Day (3 kowtows); (9) 24th day of the 6th month — Dharma Master Guan's Birthday (5 kowtows); (10) 19th day of the 7th month — Holy Teacher's Birthday (Three bows, nine kowtows); (11) 30th day of the 7th month — Earth Treasury Ancient Buddha's Birthday (5 kowtows); (12) 2nd day of the 8th month — Steadfast Golden Immortal's Enlightenment Day (3 kowtows); (13) 3rd day of the 8th month — Kitchen God's Birthday (3 kowtows); (14) 15th day of the 8th month — Holy Teacher's Enlightenment Day (Three bows, nine kowtows); (15) 28th day of the 8th month — Holy Mother's Birthday (Three bows, nine kowtows); (16) 7th day of the 9th month — Steadfast Golden Immortal's Birthday (3 kowtows); (17) September 28th (Gregorian) — Confucius's Birthday (5 kowtows); (18) 27th day of the 10th month — Venerable Lord of Great Virtue's Birthday (3 kowtows).`},
+  {zh: `每日獻香禮中均以至誠之心默唸愿懺文，而非囫圇吞棗，將愿懺文當詞句隨口而唸。`, en: `During the daily incense offering rite, the Vow and Repentance Prayer should be recited silently with utmost sincerity — not carelessly rattled off as mere words.`},
+  {zh: `愿∥愿是原來的心，本來的心，也就是真心。`, en: `'Vow' (愿) — Vow is the original heart, the innate heart, which is the true heart.`},
+  {zh: `愿也有心願、祈求的意思。`, en: `'Vow' also carries the meaning of heartfelt wish and supplication.`},
+  {zh: `懺∥懺是懺悔。`, en: `'Repentance' (懺) — Repentance means to confess.`},
+  {zh: `把過去所有的罪、過、錯、毛病、習氣，全部毫無隱瞞、毫不保留地呈現出來謂之「懺」。`, en: `To present all past sins, transgressions, faults, bad habits, and tendencies fully and without concealment is called 'repentance' (懺).`},
+  {zh: `52所有的罪過錯、毛病、習氣，今已覺悟，悉皆永斷，絕不再犯謂之「悔」。`, en: `All sins, faults, bad habits, and tendencies — having now awakened to them — are to be permanently severed and never committed again; this is called 'contrition' (悔).`},
+  {zh: `所以愿懺文三個字，就是真誠的表露自己的心願、心意，誠誠懇懇地祈求、懺悔的意思。`, en: `Therefore, the three characters 'Vow and Repentance Prayer' mean: sincerely expressing one's heartfelt wishes and intentions, and earnestly supplicating and repenting.`},
+  {zh: `（二）愿懺文的解釋（乾）餘蘊：尚有遮蓋迷失的弟子。`, en: `(2) Explanation of the Vow and Repentance Prayer. (Male, Qian) 'Yu Yun' — a disciple still shrouded and lost in delusion.`},
+  {zh: `（坤）信士：信心不二的女士。`, en: `(Female, Kun) 'Xin Shi' — a lady of unwavering faith.`},
+  {zh: `「虔心跪在明明上帝蓮下，幸受真傳」一貫道道親，內心真誠而恭敬地跪在明明上帝蓮下，感謝老慈悲大賜度脫生死苦厄的明路，非常幸運有此厚福，得受真傳的感激之情。`, en: `'Kneeling devoutly before the lotus throne of the Venerable Heaven, fortunate to receive the True Transmission' — an I-Kuan Tao practitioner kneels sincerely and reverently before the Venerable Heaven, grateful for Heaven's great compassion in bestowing the clear path to liberation from the suffering of life and death, and deeply grateful for the blessing of having received the True Transmission.`},
+  {zh: `「彌勒祖師，妙法無邊，護庇眾生，懺悔佛前，改過自新，同註天盤」彌勒祖師乃是應運來此世間收圓的古佛。`, en: `'Patriarch Maitreya, of boundless wondrous dharma, protects all living beings; repent before the Buddha, reform oneself, and be registered together on the Heavenly Scroll' — Patriarch Maitreya is the Ancient Buddha who has descended according to the era's calling to bring about the final salvation.`},
+  {zh: `他的妙法是無量無邊，時時在護庇著我們，我們只有以虔誠之心，在佛前懺悔改過，潔白自身，一同註冊在天盤上。`, en: `His wondrous dharma is boundless, constantly protecting us. We can only, with devout hearts, repent and reform before the Buddha, purify ourselves, and be registered together on the Heavenly Scroll.`},
+  {zh: `「凡係佛堂，顛倒錯亂，望祈祖師赦罪容寬」佛堂顛倒錯亂並非單指佛桌、佛椅、佛具、拜墊、門窗等不夠整齊清潔（當然要力求其整齊清潔），而最重要的是指自身佛堂，因為心外無佛，這個身體才是名符其實的佛堂。`, en: `'For all matters of the temple in disorder and confusion, pray that the Patriarch forgive our sins and be lenient' — 'temple in disorder' does not merely refer to the altar table, chairs, ritual implements, kneeling mats, doors, and windows being insufficiently neat and clean (though one should certainly strive for neatness and cleanliness); more importantly, it refers to one's own personal 'temple' — for there is no Buddha outside the heart, and this body is the true temple.`},
+  {zh: `所謂的自身佛堂顛倒錯亂有下列幾點：一、立愿不能切實地行愿了愿。`, en: `The so-called personal temple in disorder and confusion includes the following: First, making vows but failing to truly fulfill and complete them.`},
+  {zh: `53二、誤己誤人，耽誤普渡三曹大事。`, en: `Second, misleading oneself and others, delaying the great mission of universal salvation across the Three Realms.`},
+  {zh: `三、由於本身言行不慎、不一，而影響道親修辦道的信念。`, en: `Third, through one's own careless and inconsistent words and actions, undermining fellow practitioners' faith in cultivating and spreading the Tao.`},
+  {zh: `四、雖未付諸言行，但已起種種不善，不正之心者。`, en: `Fourth, although not yet expressed in words or actions, having already harbored all manner of unwholesome and improper thoughts.`},
+  {zh: `譬如起慳貪心、嗔恨、愚癡、妄想、嫉妒、諂曲、誑妄、高傲、自私、邪見、邪淫等一切不善、不正之心。`, en: `For example: arising thoughts of miserliness and greed, hatred, ignorance, delusion, jealousy, flattery and deceit, arrogance, selfishness, wrong views, licentiousness — all manner of unwholesome and improper minds.`},
+  {zh: `以上這些都是自身佛堂的顛倒錯亂。`, en: `All of the above constitute the disorder and confusion of one's personal temple.`},
+  {zh: `【跪讀愿懺文】
+【跪讀愿懺文】「南無阿彌十佛天元」何謂南無？`, en: `【Recitation of the Vow and Repentance Prayer on One's Knees】 'Namo Ami Shi Fo Tian Yuan' — What does 'Namo' mean?`},
+  {zh: `南無為禮敬、稽首、救我、度我之意，是眾生向佛至心皈依、信順之語。`, en: `'Namo' means reverence, prostration, 'save me,' and 'deliver me' — it is the language of wholehearted refuge, faith, and submission by all beings toward the Buddha.`},
+  {zh: `阿彌為無量光明、無量智慧、無量壽之意。`, en: `'Ami' means boundless light, boundless wisdom, and boundless life.`},
+  {zh: `即十方佛聖。`, en: `That is, all Buddhas of the ten directions.`},
+  {zh: `天元即天地萬物的本元。`, en: `'Tian Yuan' is the primordial source of all things in heaven and earth.`},
+  {zh: `「南無阿彌十佛天元」全意為：皈依無量無邊十方本元的天真佛。`, en: `The full meaning of 'Namo Ami Shi Fo Tian Yuan' is: taking refuge in the primordial, boundless True Buddhas of the ten directions.`},
+  {zh: `即是盡十方、遍法界所有一切諸佛、菩薩、聖真，我皆當盡心一意，毫不虛偽，至心恭敬禮拜之。`, en: `That is: all Buddhas, Bodhisattvas, and Holy Sages throughout the ten directions and across the entire dharma realm — to all of them, with undivided mind, without any pretense, I reverently pay homage and prostrate.`},
+  {zh: `54從愿懺文中可知天天唸愿懺文時，就是時時知恩感恩，皈依禮敬彌勒祖師，時時親近彌勒祖師，時時做彌勒的眷屬，奉彌勒的言行，則可消除無量罪業，增進無量光明、無量智慧。`, en: `From the Vow and Repentance Prayer, we understand that reciting it daily is to be ever grateful and thankful, to take refuge in and revere Patriarch Maitreya, to draw near to him at all times, to always be among Maitreya's devotees, and to follow Maitreya's words and deeds — thereby eliminating boundless karmic obstacles and increasing boundless light and wisdom.`},
+  {zh: `因此在漫長的修行路途上，我們不會感到徬徨無主，更不會走入歧途邪路，或半途而廢，因為應運收圓的彌勒慈尊，會時時引導我們走向光明大道而登上彼岸。`, en: `Therefore on the long path of spiritual cultivation, we will not feel lost or without direction, nor will we go astray or abandon the path midway — for the compassionate Patriarch Maitreya, who has descended according to the era to carry out the final salvation, will constantly guide us toward the bright path and to the other shore.`},
+  {zh: `十九、佛號簡介明明上帝至清至淨、至虛至靈、至高至上、至大至剛、至神至聖、一真法界、三界十方，萬靈之真主宰。`, en: `XIX. Brief Introduction to the Divine Titles. The Venerable Heaven: supremely pure and clear, supremely empty and spiritual, supremely high and exalted, supremely great and steadfast, supremely divine and holy — the True Sovereign of the One True Dharma Realm, the Three Realms and Ten Directions, and all spiritual beings.`},
+  {zh: `本無名稱，強名曰明明上帝，無極皇、或老，即化育天地萬物之。`, en: `Originally without name, forcibly named the Venerable Heaven (Ming Ming Shang Di), the Infinite Sovereign or Ancient Mother — the one who nurtures and transforms all things in heaven and earth.`},
+  {zh: `其全名為「明明上帝無量清虛至尊至聖三界十方萬靈真宰」。`, en: `The full title is: 'The Venerable Heaven, of Boundless Pure Emptiness, Supreme Exaltation, Supreme Sanctity, True Sovereign of the Three Realms, Ten Directions, and All Spiritual Beings.'`},
+  {zh: `明明：言其本體也。`, en: `'Ming Ming' (明明) — speaks of the original essence.`},
+  {zh: `上帝：尊其主宰也。`, en: `'Shang Di' (上帝, Sovereign God) — honors the supreme authority.`},
+  {zh: `無量：形容其大也。`, en: `'Wu Liang' (無量, Boundless) — describes the vastness.`},
+  {zh: `清虛：說明其相也。`, en: `'Qing Xu' (清虛, Pure Emptiness) — describes the appearance.`},
+  {zh: `55至尊：崇拜其位也。`, en: `'Zhi Zun' (至尊, Supreme Exaltation) — venerates the position.`},
+  {zh: `至聖：敬重其德也。`, en: `'Zhi Sheng' (至聖, Supreme Sanctity) — reveres the virtue.`},
+  {zh: `三界：即其範圍也。`, en: `'San Jie' (三界, Three Realms) — indicates the scope.`},
+  {zh: `十方：言無不在也。`, en: `'Shi Fang' (十方, Ten Directions) — says that it is everywhere.`},
+  {zh: `萬靈：用在萬靈也。`, en: `'Wan Ling' (萬靈, All Spiritual Beings) — acts upon all spiritual beings.`},
+  {zh: `真宰：永恆不變也。`, en: `'Zhen Zai' (真宰, True Sovereign) — eternally unchanging.`},
+  {zh: `宇宙一切天地萬物，萬行萬端之最高主宰。`, en: `The highest sovereign over all things in the universe — over every action and phenomenon.`},
+  {zh: `在儒教稱之維皇上帝；道教稱元始天尊；佛教稱之如來；耶教稱之上帝、天父；回教稱之為阿拉真主，實則同一也。`, en: `In Confucianism, called the August Sovereign God (維皇上帝); in Taoism, the Primordial Heavenly Worthy (元始天尊); in Buddhism, the Tathagata (如來); in Christianity, God / Heavenly Father; in Islam, Allah — in truth, they are all the same.`},
+  {zh: `【佛號簡介】
+【佛號簡介】「」字若非末劫降道，不輕易發明此聖諱。`, en: `【Brief Introduction to the Divine Titles】 The character 'Mu' (母, Mother) would not have been revealed as a sacred name unless it were the end-time descent of the Tao.`},
+  {zh: `無極皇乃我靈性所自出之。`, en: `The Infinite Sovereign (Ancient Mother) is the source from which our spiritual nature originates.`},
+  {zh: `「」字倒寫而為「母」字，在後天母子連心，先天與我又何嘗不然？`, en: `The character 'Mu' (母) written in reverse becomes 'Mu' (母, mother) — the bond of mother and child in the temporal world, and how could it be otherwise in the pre-heaven realm with us?`},
+  {zh: `故人遇難則呼天，足見人雖流落紅塵，但潛意識中仍未忘懷先天老。`, en: `Hence, when people encounter hardship, they call out to Heaven — demonstrating that, though people wander in the mortal world, the subconscious still does not forget the pre-heaven Ancient Mother.`},
+  {zh: `天地君親師人生於世間所蒙受之恩澤，係固有五恩之崇拜：一為天覆地載恩，二為日月照臨恩，三為國家保護恩，四為父母養育恩，五為師長教導恩，應時刻緬懷感恩，不可忘本，君子務本，本立而道生也。`, en: `Heaven, Earth, Sovereign, Parents, and Teacher — the gracious blessings received in human life correspond to the veneration of the inherent Five Beneficences: (1) the grace of Heaven covering and Earth supporting; (2) the grace of the sun and moon illuminating; (3) the grace of the nation protecting; (4) the grace of parents nurturing; (5) the grace of teachers guiding. One should at all times cherish these gratefully and not forget one's roots — for the noble person tends to the root, and when the root is established, the Tao flourishes.`},
+  {zh: `56諸天神聖泛指理天、氣天、象天之天地神祇、仙佛聖賢而言。`, en: `All Heavenly Saints: a general term for all divine beings, immortals, Buddhas, and holy sages of Li-Heaven (Spiritual Heaven), Qi-Heaven (Ethereal Heaven), and Xiang-Heaven (Material Heaven).`},
+  {zh: `值此三期末劫，大道闡揚之際，無可限量諸佛神聖等，盡發大願助道救拔眾生，遇難救難，遇災除焉，遇善相助，遇事相辦，力化頑冥，以期同歸理天。`, en: `In this era of the Third Period End-Calamity, as the Great Tao is being proclaimed, the countless Buddhas and holy beings have all made great vows to assist the Tao and save living beings — rescuing the distressed in times of danger, eliminating disasters, assisting the virtuous, handling affairs, tirelessly transforming the confused, so that all may return together to Li-Heaven.`},
+  {zh: `故凡禮拜諸天神聖，即已遍禮一切神、佛、聖、仙，而不漏一尊。`, en: `Therefore, to bow in reverence to All Heavenly Saints is to offer reverence to all gods, Buddhas, holy sages, and immortals without missing a single one.`},
+  {zh: `彌勒祖師彌勒是他老人家的姓氏，意即「慈氏」，乃無量劫
+前，精修慈心三昧得成正果。`, en: `Patriarch Maitreya: 'Maitreya' is his family name, meaning 'the clan of compassion' (慈氏). In boundless kalpas past, he attained Buddhahood through the dedicated cultivation of the samadhi of compassion.`},
+  {zh: `曾轉世為布袋和尚、傅大士，現今應運於三期末劫之時，倒裝降世為第十七代祖師─路祖中一，因奉命掌白陽天盤，又稱為掌盤祖師。`, en: `He was once reincarnated as the Cloth-Bag Monk (布袋和尚) and Master Fu (傅大士). Now, responding to the calling of the Third Period End-Calamity, he descended incarnate as the 17th Generation Patriarch — Lu Zhongyi — and is also called the Master of the Heavenly Scroll (掌盤祖師), having been entrusted with overseeing the White Yang Heavenly Scroll.`},
+  {zh: `彌勒佛於過去劫中，在一切智光明仙人時，聞慈心三昧，而得慈心大定，故稱彌勒佛，亦稱慈氏佛，有偈曰：「我肉眾生肉，名殊體不殊。`, en: `In a past kalpa, as the Immortal of All-Illuminating Wisdom (一切智光明仙人), Maitreya Buddha heard of the samadhi of compassion and attained the great samadhi of compassion — hence called Maitreya Buddha, also known as the Buddha of the Compassion Clan. A verse says: 'My flesh and all sentient beings' flesh — the name differs, but the nature is the same.'`},
+  {zh: `」另又應生於妙寶蓮花髻轉輪聖王時，拜普智寶燄妙德幢王佛，因護持正法，驅逐魔王，勇猛不退，故又名阿逸多（梵語），即無能勝之意。`, en: `He also responded to birth during the time of the Dharma Brilliant Flame Sublime Virtue Banner King Buddha (普智寶燄妙德幢王佛), and because he upheld the righteous dharma and bravely drove out the demon king without retreating, he was named Ajita (梵語: Ajita) in Sanskrit — meaning 'one who cannot be conquered.'`},
+  {zh: `彌勒佛慈憫大千國土，十方眾生，輪迴轉變受苦，故化身顯應，時時度化，隨方調順，五代梁時曾現跡於明州奉化縣，號長汀子，時人呼布袋和尚，至梁貞元三57年，端坐岳林寺磐石入滅，後又現於他地，亦負布袋而行。`, en: `Maitreya Buddha, compassionately regarding the suffering of beings throughout the three-thousandfold world and the ten directions, manifested in response and tirelessly delivered beings, adapting as needed. During the Five Dynasties Liang period, he appeared in Mingzhou Fenghua County (明州奉化縣), with the name Changting Zi (長汀子), whom people called the Cloth-Bag Monk. In the third year of the Liang Zhenming era, he passed in seated meditation at Yuelin Monastery on a great rock, and later appeared again elsewhere, also carrying his cloth bag.`},
+  {zh: `其時曾留真跡云：「彌勒，真彌勒，化身千百億，時時示世人，世人自不識。`, en: `He left behind a verse: 'Maitreya, the true Maitreya — manifesting in a thousand million forms; at all times revealing himself to the world's people; yet the world's people do not recognize him on their own.'`},
+  {zh: `」彌勒佛際此末劫，奉天承運，又稱彌勒祖師。`, en: `Maitreya Buddha, at this time of the end-calamity, bears the Heavenly Mandate and is also called Patriarch Maitreya.`},
+  {zh: `更有聞彌勒名號者，五體投地，恭敬禮拜，誠心懺悔，是人過往所造諸惡業，速得清淨，得佛授記，出離三界，免受六道眾苦。`, en: `Furthermore, those who hear the name of Maitreya, prostrate with all five limbs, bow in reverence, and sincerely repent — their past evil karma will be swiftly purified; they will receive the Buddha's prophecy, escape the Three Realms, and be freed from the sufferings of the six paths.`},
+  {zh: `【佛號簡介】
+【佛號簡介】彌勒佛之尊像現已遍傳四海，廣為世人所珍愛，或以大肚佛名之，或以歡喜佛名之，咸皆倍受供養禮拜，可見天運所至、人心所趨之大皈依也。`, en: `【Brief Introduction to the Divine Titles】 The sacred image of Maitreya Buddha has now spread throughout the world, cherished widely by people — some call him the Big-Belly Buddha, others the Smiling Buddha — all revering and making offerings, which shows the great refuge where the Heavenly era has arrived and human hearts naturally converge.`},
+  {zh: `金公祖師彌勒佛應世為道脈第十七代祖師，姓路諱中一，號通理子，山東濟寧人，應運普傳為白陽初祖，又曰「儒童金公」。`, en: `Patriarch Jin-Gong: Maitreya Buddha manifested in the world as the 17th Generation Patriarch of the Tao lineage, with the family name Lu (路) and given name Zhongyi (中一), courtesy name Tongli Zi (通理子), from Jining, Shandong — appointed by Heaven to transmit the Tao universally as the founding patriarch of the White Yang era, also called 'Confucian Youth Jin-Gong' (儒童金公).`},
+  {zh: `光緒年間赴直隸從軍，後蒙老指引往山東青州訪清虛祖師求道，拜十六代祖劉祖為師，跟隨劉祖修道，每日打柴做飯，苦修多年，數年後劉祖年邁，經老指示批訓後，奉天命掌白陽天盤，普渡眾生，辦理末後一著收圓大事。`, en: `During the Guangxu reign, he joined the army in Zhili. Later, guided by the Ancient Mother, he traveled to Qingzhou, Shandong to seek out Patriarch Qingxu and receive the Tao. He became a student of the 16th Generation Patriarch Liu Zu, followed him in cultivation, chopped firewood and cooked daily, and cultivated diligently for many years. In later years, when Patriarch Liu was aged, after receiving divine direction and decree from the Ancient Mother, he received the Heavenly Mandate to oversee the White Yang Heavenly Scroll and universally save living beings, handling the final-era mission of gathering all souls.`},
+  {zh: `祖師聖靈借山西楊春齡竅，顯化一百天，口吐金公妙典，口說彌勒真經傳世，以儆醒迷頑，訓勉同修。`, en: `The holy spirit of the Patriarch borrowed the spirit-mouth (扶鸞) of Yang Chunling of Shanxi, manifesting for one hundred days, speaking the wondrous teachings of Jin-Gong and orally transmitting Maitreya's True Scripture to the world, so as to awaken the deluded and exhort fellow cultivators.`},
+  {zh: `南海古佛即南海觀世音菩薩。`, en: `Ancient Buddha of the South Sea: the Guanyin Bodhisattva of the South Sea.`},
+  {zh: `菩薩在歷劫前早已成佛，法號正法明，然以其大悲願「眾生未盡，誓不成佛」，故至今多以菩薩名之。`, en: `The Bodhisattva had already attained Buddhahood eons ago, with the dharma name 'Zheng Fa Ming' (True Dharma Radiance); however, due to the great vow of compassion — 'As long as sentient beings are not all delivered, I vow not to attain Buddhahood' — she is still predominantly referred to by the Bodhisattva name.`},
+  {zh: `南海古佛在眾生怖畏急難之中，能施以無畏行，且
+能應眾生之機，有普現三十二應身之願，聞聲救苦，慈悲渡眾，遍度十方眾生，顯應事蹟特多。`, en: `The Ancient Buddha of the South Sea can bestow the gift of fearlessness upon beings in times of terror and distress, and responds to the faculties of all beings. With the vow to manifest in thirty-two response forms, she hears the cries of the world and rescues those in suffering, compassionately delivering beings, saving all throughout the ten directions — her wondrous responses are especially numerous.`},
+  {zh: `因與娑婆世界眾生大有因緣，世稱觀世音菩薩，道教稱觀音大士，理教稱聖宗古佛。`, en: `Having a profound karmic connection with the beings of this Saha world, she is known by the world as Guanyin Bodhisattva; in Taoism called Guanyin Great Bodhisattva (觀音大士); in the Li Religion called Sacred Ancestral Ancient Buddha (聖宗古佛).`},
+  {zh: `值此三期末劫，南海古佛發願助道，到處闡揚道宗，不留餘力，亦為法律主之一。`, en: `In this Third Period End-Calamity, the Ancient Buddha of the South Sea has made a vow to assist the Tao, tirelessly proclaiming the Tao everywhere — and is also one of the Dharma Masters.`},
+  {zh: `五教聖人五教聖人皆奉天命應運下世教化人心，闡明大道之體用，是上天真理的代言人。`, en: `Saints of the Five Religions: the saints of the five religions all received the Heavenly Mandate according to the era to descend into the world to enlighten the human mind, clarify the essence and function of the Great Tao, and serve as spokespersons of Heavenly truth.`},
+  {zh: `（一）佛教：釋迦牟尼—生於印度。`, en: `(1) Buddhism: Shakyamuni Buddha — born in India.`},
+  {zh: `主張明心見性，萬法歸一。`, en: `Teaching: illuminate the mind and perceive one's original nature; all dharmas return to the One.`},
+  {zh: `59（二）道教：老子—生於中國。`, en: `(2) Taoism: Lao-Zi — born in China.`},
+  {zh: `主張修心煉性，抱元守一。`, en: `Teaching: cultivate the mind and refine the nature; embrace the primordial and keep to the One.`},
+  {zh: `（三）儒教：孔子—生於中國。`, en: `(3) Confucianism: Confucius — born in China.`},
+  {zh: `主張存心養性，執中貫一。`, en: `Teaching: preserve the mind and nourish the nature; hold the mean and penetrate the One.`},
+  {zh: `（四）基督教：耶穌—猶太人。`, en: `(4) Christianity: Jesus — Jewish.`},
+  {zh: `主張洗心移性，默禱親一。`, en: `Teaching: cleanse the mind and transform the nature; pray in silence and draw close to the One.`},
+  {zh: `（五）回教：穆罕默德—阿拉伯人。`, en: `(5) Islam: Muhammad — Arabian.`},
+  {zh: `主張堅心定性，清真返一。`, en: `Teaching: strengthen the mind and stabilize the nature; return to purity and truth, return to the One.`},
+  {zh: `「一」者為獨一無二之真理，亙古長存。`, en: `The 'One' is the unique and incomparable truth that has existed through all eternity.`},
+  {zh: `聖人皆悟此宇宙之妙理，故於其經教之間，在在印證出道真、理真、天命真的尊貴。`, en: `All sages awakened to this wondrous principle of the universe, and throughout their scriptures and teachings, they everywhere affirm the nobility of the truth of the Tao, the truth of the Principle, and the truth of the Heavenly Mandate.`},
+  {zh: `【佛號簡介】
+【佛號簡介】儒家的特色強調忠誠、倫理道德與社會規範。`, en: `【Brief Introduction to the Divine Titles】 The characteristic of Confucianism emphasizes loyalty, ethical morality, and social norms.`},
+  {zh: `佛教提到慈悲心，因果及輪迴轉世。`, en: `Buddhism speaks of compassion, karma, and reincarnation.`},
+  {zh: `道教著重於「道」是一切宇宙萬物的本源，而要清靜無為，順應自然。`, en: `Taoism emphasizes that the 'Tao' is the source of all things in the universe, advocating stillness, non-action, and following the natural order.`},
+  {zh: `基督教則呼籲神愛世人，屏除偶像及遵守十誡。`, en: `Christianity calls for God's love for humanity, rejection of idols, and keeping the Ten Commandments.`},
+  {zh: `伊斯蘭教返璞歸真，歸一於真主真神阿拉。`, en: `Islam advocates returning to simplicity and truth, unifying with Allah, the True God.`},
+  {zh: `活佛師尊即濟公活佛。`, en: `Patriarch Ji-Gong (Living Buddha): that is, the Living Buddha Ji-Gong.`},
+  {zh: `俗姓李，宋朝浙江省天臺縣人，十八歲出家靈隱寺，法號道濟，人稱道濟禪師，或瘋僧。`, en: `His secular surname was Li, born in Tiantai County, Zhejiang Province during the Song Dynasty. He left home at age eighteen to enter Lingyin Monastery, with the dharma name Dao Ji (道濟), known by people as Zen Master Dao Ji or the Mad Monk.`},
+  {zh: `道濟大智若愚，學富五車，性帶詼諧，不拘小節，若顛若狂，神化莫測，扶危濟困，化解迷頑，廣結善緣，民間多以「活佛」尊之。`, en: `Dao Ji appeared foolish yet possessed great wisdom; his learning was vast; his nature playful and unbound by conventions; appearing erratic and unpredictable, his divine transformations were unfathomable. He supported the weak, helped the poor, and transformed the confused. He formed good ties with all, and the people revered him as 'Living Buddha.'`},
+  {zh: `活佛師尊歷代遊戲人間，普救眾生，行跡匪測，明化暗渡，人莫知之。`, en: `Patriarch Ji-Gong has wandered through the mortal world across many lifetimes, universally saving living beings; his traces are unpredictable, transforming overtly and delivering covertly — unknown to most.`},
+  {zh: `今逢大道普渡，又倒裝下凡為一代祖師，奉天命傳授妙法，大開普渡，三曹收圓，大利人天，所以天上人間共尊為活佛師尊。`, en: `Now, at the time of the universal salvation of the Great Tao, he has again descended incarnate as the Patriarch of this era. Receiving the Heavenly Mandate to transmit the wondrous dharma, he opened wide the door of universal salvation, gathering all souls of the Three Realms and greatly benefiting Heaven and humanity — thus he is revered by both Heaven and the human world as Patriarch Ji-Gong.`},
+  {zh: `師尊乃活佛師尊欽領天命倒裝下凡，俗姓張，道號天然，降生於清光緒十四年，與師母在山東省同領天命，承繼道脈為第十八代祖師，亦為白陽二祖，歸空於民國
+三十六年中秋日，諡為「天然古佛」。`, en: `The Holy Teacher: that is, Patriarch Ji-Gong personally received the Heavenly Mandate and descended incarnate. His secular surname was Zhang (張) and his Tao name was Tianran (天然). Born in the 14th year of the Guangxu reign of the Qing Dynasty, he and the Holy Mother together received the Heavenly Mandate in Shandong Province, inherited the Tao lineage as the 18th Generation Patriarch, and is also the Second Patriarch of the White Yang era. He passed from this world on the Mid-Autumn Festival of the 36th year of the Republic of China, posthumously titled 'Tianran Ancient Buddha' (天然古佛).`},
+  {zh: `師尊在先天奉上天明命，後天為兆民之明師，代天宣化，點傳性理真傳，使眾生頓悟本來面目，返本還原。`, en: `The Holy Teacher, in the pre-heaven realm, received the clear command of Heaven; in the temporal world, he served as a bright teacher to the multitudes, proclaiming Heaven's teachings on behalf of Heaven, and transmitting the True Transmission of the spiritual nature, enabling all beings to instantly awaken to their original face and return to their origin.`},
+  {zh: `師尊之因緣應於對日抗戰期間，其時凡與師尊有緣眾生皆盡得渡，道務之拓展無遠弗屆。`, en: `The Holy Teacher's karmic connection manifested during the War of Resistance against Japan, when all beings with karmic affinity with the Holy Teacher were delivered; the expansion of the Tao's mission reached far and wide.`},
+  {zh: `雖適時戰亂迭起，列強欺凌，考魔重重，然天道正理，愈經考驗，愈得闡明蓬勃，今日求道人普遍，乃當時所紮之根基。`, en: `Although wars broke out repeatedly, great powers oppressed, and trials were heavy, the righteous principles of the Heavenly Tao — the more tested, the more they flourished and became clear. The widespread number of Tao seekers today is rooted in the foundation laid at that time.`},
+  {zh: `月慧菩薩宋朝人，在俗因與濟公活佛有指腹為婚的因緣，無量劫前修成正果，與濟公活佛同掌道盤，乃為我們先天師母。`, en: `Yue Hui Bodhisattva: a person of the Song Dynasty, who in secular life had a karmic connection with the Living Buddha Ji-Gong through a prenatal marriage vow. Having attained spiritual fruition in boundless kalpas past, she shares oversight of the Tao scroll with the Living Buddha Ji-Gong, and is our pre-heaven Holy Mother.`},
+  {zh: `及長而作詩嘆訴：「寄寓客家，牢守寒窗空寂寞」，活佛遊到此地對以：「遠避迷途，退還蓮逕返逍遙」指點度化而得成就。`, en: `Growing up, she wrote a poem of lament: 'Lodging in a stranger's home, keeping to the cold window in empty solitude.' When the Living Buddha traveled to that place, he responded: 'Far from the path of delusion, retreating to the lotus path and returning to freedom' — guiding and delivering her to attainment.`},
+  {zh: `師母乃月慧菩薩乘願下世。`, en: `The Holy Mother is Yue Hui Bodhisattva who descended to the world in fulfillment of her vow.`},
+  {zh: `民初人，姓孫名素真，又名明善，山東單縣人，降生於民國前十七年，與師尊共負普渡收圓之重任，尊稱孫師母。`, en: `Born in the early Republic era, with the family name Sun (孫), given name Suzhen (素真), also named Mingshan (明善), from Shan County, Shandong, born 17 years before the founding of the Republic of China. Together with the Holy Teacher, she bore the great responsibility of universal salvation and final gathering of souls — revered as 'Mother Sun' (孫師母).`},
+  {zh: `古德有云：「弓長子系辦末年。`, en: `An ancient sage said: 'Gong Zhang Zi Xi ban mo nian' (弓長子系辦末年).`},
+  {zh: `」即指此一大事因緣。`, en: `This refers precisely to this great karmic event.`},
+  {zh: `自師尊歸空後，師母接掌道盤，肩負三曹使命，不辭艱辛，頂劫救世，受毀受【佛號簡介】
+【佛號簡介】謗，忍辱負重，慈德廣被四海，眾生仰之，如逢春暉，故亦尊為「慈母大人」。`, en: `After the Holy Teacher passed, the Holy Mother assumed leadership of the Tao, shouldering the mission of the Three Realms — tirelessly bearing hardship, weathering calamities to save the world, enduring slander and blame, bearing humiliation with forbearance; her compassionate virtue spread across the seas, and all beings looked up to her as to the spring sunlight — thus she is also revered as the 'Compassionate Mother' (慈母大人).`},
+  {zh: `歸後上天封為「中華聖母」。`, en: `After passing, she was bestowed by Heaven with the title 'Holy Mother of China' (中華聖母).`},
+  {zh: `各位法律主法律主有八位，專司考核修道人之善惡居心，主管戒律，護持道場之莊嚴肅穆，進退愚智等。`, en: `Dharma Masters: there are eight Dharma Masters, who specifically oversee and evaluate the good and evil intentions of those cultivating the Tao, administer the precepts, and uphold the solemn dignity of the Tao Center, guiding the wise and unwise alike.`},
+  {zh: `包括：（一）南海古佛：見前。`, en: `They include: (1) Ancient Buddha of the South Sea: see above.`},
+  {zh: `（二）地藏古佛：即地藏王菩薩。`, en: `(2) Earth Treasury Ancient Buddha: that is, Ksitigarbha Bodhisattva (地藏王菩薩).`},
+  {zh: `歷劫來，世世發願救拔眾生苦，有「地獄不空，誓不成佛」的大宏願，其威神力不可思議。`, en: `Throughout countless kalpas, he has made the vow in every life to rescue all beings from suffering, with the great aspiration: 'As long as hell is not empty, I vow not to attain Buddhahood.' His divine power and authority are inconceivable.`},
+  {zh: `（三）純陽大帝：即呂祖師，唐京兆人，名喦，字洞賓，法號純陽子。`, en: `(3) Pure Yang Great Emperor: that is, Patriarch Lü (呂祖師), a person of the Tang Dynasty from Jingzhao. His name was Yan (喦), courtesy name Dongbin (洞賓), dharma name Pure Yang Zi (純陽子).`},
+  {zh: `年四十六兩舉進士不第，浪遊江湖，遇鍾離權而師之，鍾離欲教點石成金之術，呂祖師問：「此石何時復原？`, en: `Having twice sat for the imperial examinations at age forty-six without passing, he wandered freely through the land and encountered Zhong Liquan (鍾離權), whom he took as a teacher. Zhong wanted to teach him the art of transmuting stone into gold. Patriarch Lü asked: 'How long before this stone reverts to its original form?'`},
+  {zh: `」「五年後。`, en: `'After five years.'`},
+  {zh: `」曰：「不學也，以我一人之福，殃及五年之後世，不為也！`, en: `He replied: 'Then I will not learn it — to benefit myself alone while causing harm to future generations five years hence, I will not do it!'`},
+  {zh: `」鍾離即授以正道曰：「汝將來成果應在我之上。`, en: `Zhong immediately transmitted the righteous path to him, saying: 'Your future attainment will surpass mine.'`},
+  {zh: `」故呂祖常自稱為道人，歷代奇異神蹟甚多，後世祀為純陽大帝或仙公。`, en: `Therefore Patriarch Lü always called himself a man of the Tao; his miraculous deeds throughout history are numerous. Later generations enshrined him as the Pure Yang Great Emperor or the Immortal Lord.`},
+  {zh: `（四）長生大帝：即彭祖。`, en: `(4) Longevity Great Emperor (長生大帝): that is, Ancestor Peng (彭祖).`},
+  {zh: `帝顓頊之玄孫，姓籛名鏗，為堯帝時臣，善養真修性，精於導引行氣，有疾能用氣攻之。`, en: `A great-great-grandson of Emperor Zhuanxu, family name Jian (籛), given name Keng (鏗). A minister under Emperor Yao, he was skilled at nurturing true nature and cultivating the self, proficient in guiding qi and circulating breath — even able to combat illness through qi cultivation.`},
+  {zh: `後遇異人傳授真道，至殷末已活七百六十七歲而不衰，後不知其所去。`, en: `He later encountered an extraordinary person who transmitted to him the true path. By the end of the Shang Dynasty, he had lived 767 years without declining; whereabouts afterward unknown.`},
+  {zh: `因其封地為大彭，故世稱彭祖。`, en: `Because his fief was called Da Peng (大彭), he is known to the world as Ancestor Peng.`},
+  {zh: `彭祖修持功深，列諸仙之長，受封為長生大帝，管轄南天門，亦稱南極仙翁、南極長生司命君，於此三曹普渡之際，專司大仙拔渡之職。`, en: `Ancestor Peng's cultivation was deeply attained; ranked first among the immortals. He was conferred the title Longevity Great Emperor, governing the South Heavenly Gate. Also called the Southern Pole Immortal Elder and the Southern Pole Longevity Life-Ruler. During this time of the Three Realms' universal salvation, he holds the specific duty of delivering the great immortals.`},
+  {zh: `（五）巡天元帥：姓岳名飛，字鵬舉，宋朝湯陰人，家貧力學，事母至孝，應募出征，神勇無比，智勇雙全，屢戰屢勝，金兵聞之喪膽，皆云天兵下降，宋高宗手書「精忠報國」賜之，為奸臣秦檜所忌，以莫須有罪名處死，年三十九。`, en: `(5) Sky-Patrolling Marshal: family name Yue (岳), given name Fei (飛), courtesy name Pengju (鵬舉). Born in Tangyin during the Song Dynasty, from a poor family yet devoted to learning; served his mother with the utmost filial piety. Enlisting in the military, his courage and valor were incomparable; both wisdom and bravery were supreme. He won every battle, and the Jin troops trembled at his name, calling him a Heaven-descended force. Emperor Gaozong of Song personally inscribed 'Serve the Nation with Utmost Loyalty' (精忠報國) and bestowed it upon him. Killed by the treacherous minister Qin Hui on fabricated charges at the age of thirty-nine.`},
+  {zh: `後世尊為穆聖，立廟建寺稱岳武穆王，後又封為巡天元帥之職。`, en: `Later generations revered him as a martial sage, building temples and calling him King Yue Wumu (岳武穆王). He was later conferred the title of Sky-Patrolling Marshal.`},
+  {zh: `（六）關聖帝君：三國蜀漢解州人，姓關名羽，字雲長，有膽識，智勇過人，好讀春秋，義薄雲天，後世尊之為神人武聖。`, en: `(6) Sacred Emperor Guan (關聖帝君): a person of Jiezhou in the Han kingdom of Shu during the Three Kingdoms period. Family name Guan (關), given name Yu (羽), courtesy name Yunchang (雲長). He possessed great courage and wisdom that surpassed others, was fond of reading the Spring and Autumn Annals (春秋), and his righteousness was as vast as the sky. Later generations revered him as a divine martial sage.`},
+  {zh: `因其護正除邪，屢建神功，後封為【佛號簡介】
+【佛號簡介】伏魔大帝，亦稱關聖帝君。`, en: `Because he upheld righteousness and expelled evil, repeatedly performing divine feats, he was later conferred the title Demon-Subduing Great Emperor (伏魔大帝), also known as the Sacred Emperor Guan.`},
+  {zh: `其英武浩然，正氣凜然，流垂千古，神蹟之顯化，實不勝枚舉。`, en: `His heroic valor, righteous aura, and upright spirit have endured through the ages — the manifestations of his divine miracles are truly too numerous to recount.`},
+  {zh: `（七）桓侯大帝：三國蜀漢涿邵人，姓張名飛，字翼德，為人甚重義氣，嫉惡如仇，驍勇過人，對君子義士敬愛踰恆，個性略為粗猛，然心直氣正，不茍曲諛，後封為桓侯大帝。`, en: `(7) Marquis Huan Great Emperor (桓侯大帝): a person of Zhuoshao in the Han kingdom of Shu during the Three Kingdoms period. Family name Zhang (張), given name Fei (飛), courtesy name Yide (翼德). A man who highly valued righteousness and hated evil; his valor surpassed all others. He treated noble men and righteous knights with exceptional reverence and love; his temperament was somewhat fierce, yet his heart was upright and honest — not given to flattery. He was later conferred the title Marquis Huan Great Emperor.`},
+  {zh: `（八）東嶽大帝：商朝末年人，姓黃名飛虎，正直無私保國愛民，乃商末之一員虎將，卒後封為東嶽大帝。`, en: `(8) Eastern Sacred Mountain Great Emperor (東嶽大帝): a person of the late Shang Dynasty, family name Huang (黃), given name Feihu (飛虎). Upright, selfless, protecting the nation and loving the people — a fierce general of the late Shang era. After his passing, he was conferred the title Eastern Sacred Mountain Great Emperor.`},
+  {zh: `64灶君司掌灶火，也掌管記錄人間每個人的言行善惡，分形化身於各家灶中之神，稱「灶君」。`, en: `The Kitchen God: oversees the kitchen fire and also records the words, actions, good and evil of every person in the human world. The deity who takes form in each household's kitchen is called the 'Kitchen God' (灶君).`},
+  {zh: `民間廟宇記載：灶神姓張名宙，字單，號子郭，是黃帝第十三代子孫，因其發明「火」而降世為灶神。`, en: `According to folk temple records: the Kitchen God's family name is Zhang (張), given name Zhou (宙), courtesy name Dan (單), style name Zi Guo (子郭) — the 13th-generation descendant of the Yellow Emperor, who descended to become the Kitchen God because he invented 'fire.'`},
+  {zh: `每年農曆十二月廿四日的「送灶神」，和農曆初五的「接灶神」，可知灶神是民間和上天的「聯絡官」，由灶神的「上天奏好事，下界降吉祥。`, en: `The annual 'Sending Off the Kitchen God' on the 24th day of the 12th lunar month, and the 'Welcoming the Kitchen God' on the 5th day of the new year, illustrate that the Kitchen God serves as a 'liaison officer' between the people and Heaven. Through the Kitchen God's role of 'reporting good deeds to Heaven above, and bringing down auspiciousness to the realm below,'`},
+  {zh: `」使我們「天人合一」的理想實現矣。`, en: `our ideal of 'unity of Heaven and humanity' (天人合一) is realized.`},
+  {zh: `鎮殿元帥悟禪師兄。`, en: `Temple-Guarding Marshal: Elder Brother Wu Chan (悟禪師兄).`},
+  {zh: `宋朝時冒充濟公，扶弱濟貧，退卻強魔，蒙受濟公活佛收為弟子。`, en: `During the Song Dynasty, he impersonated Ji-Gong, supporting the weak and aiding the poor, driving back powerful demons, and was taken as a disciple by the Living Buddha Ji-Gong.`},
+  {zh: `有詩曰：「得道紹興南，出家會稽山，神通多廣大，捨藥濟貧寒，修行飛龍山，道德五千年，拜在貧僧面，賜名叫悟禪。`, en: `A poem reads: 'Attained the Tao in southern Shaoxing, left home at Kuaiji Mountain; spiritual powers were great and vast, gave medicine to relieve the poor; cultivated at Flying Dragon Mountain, Tao virtue five thousand years; bowed before the humble monk's face, bestowed the name Wu Chan.'`},
+  {zh: `」三期出世為師尊之子，成道後封為鎮殿元帥。`, en: `In the Third Period, he was born as the Holy Teacher's son; after attaining the Tao, he was conferred the title Temple-Guarding Marshal.`},
+  {zh: `鎮殿將軍茂田師兄。`, en: `Temple-Guarding General: Elder Brother Mao Tian (茂田師兄).`},
+  {zh: `師尊之子，在世時協助師尊辦道，歸空後封為鎮殿將軍，亦是天佛院主管，專司懺悔之監判及主考三天。`, en: `The Holy Teacher's son; during his life he assisted the Holy Teacher in spreading the Tao. After passing, he was conferred the title Temple-Guarding General and also serves as the administrator of the Heavenly Buddha Academy, specifically overseeing the adjudication of repentance and the Three-Day Examination.`},
+  {zh: `65教化菩薩俗姓何，名雲婷，聖號雲遊大仙。`, en: `Teaching Bodhisattva: secular family name He (何), given name Yunting (雲婷), holy title Wandering Immortal (雲遊大仙).`},
+  {zh: `原為氣天大仙雲遊姑娘，求道前適逢瘟疫之災，到處顯化救渡眾生，同時醫癒師母聖體，以其發願助道，因助辦三曹普渡有功，教化冥頑，功德很大，又封為教化菩薩，通稱為教化師姐，是師尊領天命後第一位超拔之氣天仙。`, en: `Originally a great Qi-Heaven immortal known as the Wandering Maiden (雲遊姑娘). Before seeking the Tao, she encountered a plague epidemic and manifested everywhere to rescue beings, while also healing the Holy Mother's sacred body. Having made a vow to assist the Tao, for her meritorious service in helping to carry out the universal salvation of the Three Realms and transforming the obstinate, her virtue was immense — she was conferred the title Teaching Bodhisattva (教化菩薩), commonly called Elder Sister Teacher (教化師姐). She was the first Qi-Heaven immortal delivered after the Holy Teacher received the Heavenly Mandate.`},
+  {zh: `【佛號簡介】
+【佛號簡介】各位大仙已過世之忠臣、孝子、烈女、節婦、或煉氣之士，或唸佛參禪而未證果位者，因有大善德，得原人救渡，經長生大帝批准，受師之末後一著真傳，點開通天眼，頓超南天門。`, en: `【Brief Introduction to the Divine Titles】 Immortal Elders: those who have passed away — loyal ministers, filial sons, heroic women, chaste wives, or practitioners of qi cultivation, or those who chanted the Buddha's name or practiced Zen meditation without yet attaining the fruit of Buddhahood — because of their great virtue and goodness, they received deliverance by the original persons, and with approval from the Longevity Great Emperor, received the True Transmission of the Holy Teacher's final mission, had their Heavenly Eye opened, and instantly ascended through the South Heavenly Gate.`},
+  {zh: `又三期收圓之點傳師歸空者，多數都在大仙之列。`, en: `Furthermore, the majority of Enlightening Teachers who passed away during the final-era gathering are counted among the Immortal Elders.`},
+  {zh: `道長協助師尊、師母開荒闡道，功德至偉之老前人者。`, en: `Tao Elders (道長): Venerable Senior Elders of immense merit who assisted the Holy Teacher and Holy Mother in pioneer outreach and proclaiming the Tao.`},
+  {zh: `66老前人開闡一方道脈源流之領航始者。`, en: `Venerable Senior Elders (老前人): the founding navigators who opened and established the source of the Tao lineage in a region.`},
+  {zh: `安東道場之各位老前人為陳公慧泉老前人大德、談公紹武老前人大德、高公金澄老前人大德及柳公人漢老前人大德。`, en: `The Venerable Senior Elders of the Andong Tao Center are: Elder Chen Huiquan (陳公慧泉), Elder Tan Shaowu (談公紹武), Elder Gao Jincheng (高公金澄), and Elder Liu Renhan (柳公人漢).`},
+  {zh: `（詳見後面之簡介）前人領導一方道務之前輩，帶領點傳師、壇主辦事及前賢修辦道，將道務開闡至萬國九洲，安東道場現任前人為謝德祥前人。`, en: `(See the introductions that follow.) Senior Elders (前人): senior figures leading the Tao mission in a region, guiding Enlightening Teachers and Altar Masters in their duties and leading fellow practitioners in cultivating and spreading the Tao, extending the Tao mission across the nations of the world. The current Senior Elder of the Andong Tao Center is Senior Elder Xie Dexiang (謝德祥前人).`},
+  {zh: `點傳師身負天命，代表明師—師尊、師母傳道之道中前輩者。`, en: `Enlightening Teachers (點傳師): those who bear the Heavenly Mandate and represent the Bright Teacher — the Holy Teacher and Holy Mother — in transmitting the Tao.`},
+  {zh: `凡求道後，持齋茹素，德慧兼修，財法雙施，以道為尊，以眾生之性命為重責，足為眾人表率，得前人之引薦，由師尊、師母放命為代師點傳心法之點傳師。`, en: `Those who, after receiving the Tao, maintain a vegetarian diet, cultivate both virtue and wisdom, give generously of both wealth and dharma, honor the Tao above all, and take the lives of all beings as their solemn responsibility — serving as a model for all — upon recommendation by a Senior Elder, they receive authorization from the Holy Teacher and Holy Mother to serve as Enlightening Teachers, transmitting the heart-dharma on behalf of the Teacher.`},
+  {zh: `引保師包括引師與保師。`, en: `Sponsoring Teachers (引保師) include the Leading Teacher (引師) and the Guarantor Teacher (保師).`},
+  {zh: `引師即引進他人求道之人。`, en: `The Leading Teacher is one who introduces others to seek the Tao.`},
+  {zh: `保師即保證求道人品行端正，求道之後願遵循天理實行之，並向求道人保證所求之道是真理天道。`, en: `The Guarantor Teacher vouches that the seeker of the Tao has upright conduct and character, is willing after receiving the Tao to follow the Heavenly principles and put them into practice, and assures the seeker that the Tao being sought is the true Heavenly Tao.`},
+  {zh: `67自己祖先禮拜自己祖先為感謝：因祖先之德蔭，方有今日得道之良緣，故凡真修實煉之士，如功果圓滿可超玄拔祖，此是至孝。`, en: `One's Own Ancestors: bowing to one's own ancestors is an expression of gratitude — for it is through the virtue and blessing of the ancestors that one has today's auspicious karmic connection with the Tao. Therefore, a true and diligent cultivator, upon fulfilling one's merits and virtues, may deliver and elevate the ancestors — which is the highest filial piety.`},
+  {zh: `然因所行功果不同，超拔之量亦殊，歸空皆按功定果於天佛院內，所以欲報答父母、祖先大恩於永世者，惟精誠不懈，行功立德，方可使先祖永享逍遙。`, en: `However, since the merit and virtue performed differs, the degree of elevation also varies. After passing, all are assigned positions in the Heavenly Buddha Academy according to merit. Therefore, those who wish to repay the great grace of parents and ancestors for all eternity should be unwaveringly sincere, perform meritorious deeds, and establish virtue — only then can the ancestors enjoy eternal freedom.`},
+  {zh: `圓德聖帝—陳公慧泉老前人大德自幼聰穎敏捷，求得大道後，即發心闡揚真理天道。`, en: `Holy Emperor of Perfected Virtue (圓德聖帝) — Elder Chen Huiquan (陳公慧泉): quick-witted and intelligent from childhood; after receiving the Great Tao, immediately devoted himself to proclaiming the truth of the Heavenly Tao.`},
+  {zh: `【佛號簡介】
+【佛號簡介】民國三十三年（一九四四年），再奉恩師尊「到鳳凰山下找因緣」之命，前往有座鳳凰山的安東省（現今已併入遼寧省）境內傳道渡化有緣人，因而渡化教化天尊（談公紹武老前人大德），並協助設立一貫道在安東省的總壇--「教化壇」，做為安東聖脈發展之源流。`, en: `【Brief Introduction to the Divine Titles】 In 1944 (Republic of China Year 33), again receiving the Holy Teacher's command to 'go to the foot of Phoenix Mountain to find karmic connections,' he traveled to Andong Province (now merged into Liaoning Province), which had a Phoenix Mountain, to spread the Tao and deliver those with karmic affinity. There he delivered Elder Tan Shaowu (who became the Teaching Heavenly Worthy), and together they helped establish the general altar of I-Kuan Tao in Andong Province — the 'Teaching Altar' (教化壇) — as the source of the Andong sacred lineage.`},
+  {zh: `民國三十六年恩師尊老大人遽然成道，大陸地區道務受到道親悲慟之情及政治動盪的影響，發展日緩，公與談公遂計劃籌組海外開荒隊，但因談公病情日益嚴重而暫時擱置，遂化明為暗傳承道脈慧命；惟據聞亦遭誣陷被捕殉道，於民國九十八年十二月十二日安東彌勒山參駕佛堂安座之日臨壇慈示，並受老敕封為「圓德聖帝」果位。`, en: `In 1947, the Holy Teacher suddenly passed. The Tao mission on the mainland was slowed by the grief of practitioners and political turmoil. Elder Chen and Elder Tan planned to organize an overseas pioneer outreach team; however, as Elder Tan's illness worsened, this was temporarily shelved, and the Tao lineage's spiritual life was passed on covertly. It is said that he was also falsely accused and arrested, becoming a martyr for the Tao. On December 12, 1909 (the day of the altar consecration at Andong Maitreya Mountain), he appeared at the altar and gave a compassionate instruction, and was bestowed by the Ancient Mother with the noble title 'Holy Emperor of Perfected Virtue' (圓德聖帝).`},
+  {zh: `公得道明理後，堅心護道不退縮，尊師重道，開啟安東慧命薪傳之德澤，永受安東一脈後學之敬仰。`, en: `After receiving the Tao and understanding the truth, he steadfastly protected the Tao without retreating, respected the teacher and honored the Tao, and opened the virtue of transmitting the Andong spiritual life. He is forever revered by all later students of the Andong lineage.`},
+  {zh: `（詳見萍江竹刊第122期）教化天尊—談公紹武老前人大德山東省人，民國三十三年陳公慧泉老前人受恩師尊之命前往安東鳳凰山下找因緣，公因而求得先天大道，求道後，經陳公之協助，在自家住處安設佛堂，壇號為「教化壇」，為安東道脈之總壇。`, en: `(See Pingjiang Zhu Journal, Issue 122.) Teaching Heavenly Worthy (教化天尊) — Elder Tan Shaowu (談公紹武): a person from Shandong Province. In 1944, Elder Chen Huiquan, on the Holy Teacher's command, traveled to the foot of Phoenix Mountain in Andong. Elder Tan thereby received the pre-heaven Great Tao. After receiving the Tao, with Elder Chen's assistance, he set up an altar at his own home — the 'Teaching Altar' (教化壇) — which served as the general altar of the Andong Tao lineage.`},
+  {zh: `公早年背著工具箱，翻山越嶺到處開荒，道務遍佈各地；渴時因生飲山泉而中毒，醫治數年。`, en: `In his early years, carrying his toolbox, he crossed mountains and hills to pioneer outreach everywhere; the Tao mission spread throughout various areas. From drinking raw mountain spring water out of thirst, he was poisoned and received treatment for several years.`},
+  {zh: `時局變遷，
+大德最後因頂劫頂考而歸天。`, en: `As times changed, this great virtuous one finally ascended to Heaven through enduring calamities and trials.`},
+  {zh: `談公紹武老前人大德一心為開闡道務奉獻，捨己忘我，經常跋山涉水關心道親，雖受盡人間諸多苦處，仍不改傳承聖脈之志，扶助安東聖脈道源神州、闡於台灣、揚於萬國九洲，恩澤普被，安東全體後學永誌難忘。`, en: `Elder Tan Shaowu wholeheartedly dedicated himself to spreading the Tao mission, selflessly forgetting himself. He frequently crossed mountains and rivers to look after fellow practitioners; though he endured many hardships in the mortal world, he never changed his resolve to transmit the sacred lineage. He assisted the Andong sacred lineage in spreading from China to Taiwan and throughout the nations of the world. His grace and virtue pervaded everywhere; all later students of the Andong lineage will forever remember him.`},
+  {zh: `成道後，特蒙上天敕封為「教化天尊」，高老前人為感恩追懷談公之慈悲德澤，故特以談公之封號為各分壇之命名，「教化天尊，萬世永昌，安東一脈，性放毫光」，如宏教、宏化、宏天、宏尊分壇等。`, en: `After attaining the Tao, he was specially bestowed by Heaven with the title 'Teaching Heavenly Worthy' (教化天尊). Senior Elder Gao, in gratitude and in memory of Elder Tan's compassionate virtue, specially used Elder Tan's bestowed title to name the various branch altars: 'May the Teaching Heavenly Worthy flourish through ten thousand generations; may the Andong lineage, its nature radiating like starlight' — naming branch altars such as Hongjiao (宏教), Honghua (宏化), Hongtian (宏天), and Hongzun (宏尊).`},
+  {zh: `（詳見萍江竹刊第122期）厚德大帝—高公金澄老前人大德別號斌凱老人，民國十三年十月二十七日生於遼寧寬甸縣，民國三十一年蒙同學之成全求道，公自弱冠求道後，即誠心修辦，道心永持。`, en: `(See Pingjiang Zhu Journal, Issue 122.) Venerable Lord of Great Virtue (厚德大帝) — Elder Gao Jincheng (高公金澄): also known as Elder Bincai (斌凱老人). Born on October 27, 1924 in Kuandian County, Liaoning Province. In 1942, upon the recommendation of a classmate, he received the Tao. After receiving the Tao in his youth, he cultivated sincerely and maintained his Tao-heart permanently.`},
+  {zh: `民國三十八年與柳公人漢老前人大德會同東北地區一貫道各組線十八位前賢前往日本開荒，歷經海上險要，異國的考驗，九死一生的輾轉由安東、韓國、舟山群島來到台灣。`, en: `In 1949, together with Elder Liu Renhan and eighteen fellow practitioners of the various I-Kuan Tao lineages in northeast China, he traveled to Japan for pioneer outreach. After facing dangers at sea and trials in a foreign land, through nine deaths and one survival, he made his way from Andong through Korea and the Zhoushan Archipelago to Taiwan.`},
+  {zh: `民國四十三年設立「高博精舍」以作育修辦道賢才；六十四年設立「宏宗慈善堂」將宏道的理念帶動到整體社會，並於七十七年創立「宏宗聖堂道學院」，先【佛號簡介】
+【佛號簡介】後在美國紐約、洛杉磯、日本、馬來西亞、香港、泰國、奧地利、澳洲、印尼、巴拿馬、柬埔寨等國家安設道務中心或佛堂，開啟了道傳萬國九洲的先機。`, en: `In 1954, he established the 'Gao Bo Hermitage' (高博精舍) for cultivating talented Tao practitioners; in 1975, established the 'Hongzong Charitable Hall' (宏宗慈善堂), bringing the concept of spreading the Tao to broader society; and in 1988, founded the 'Hongzong Sacred Hall Tao Academy' (宏宗聖堂道學院). He subsequently established Tao mission centers or altars in New York, Los Angeles, Japan, Malaysia, Hong Kong, Thailand, Austria, Australia, Indonesia, Panama, Cambodia, and other countries, pioneering the spread of the Tao to the nations of the world.`},
+  {zh: `公有建立一個「老有所終、壯有所用、幼有所長」大道場之願景，未來的大道場並不是金碧輝煌的白陽大廟，而是一座真正培育道脈薪傳人才的白陽修院。`, en: `Elder Gao had a vision of establishing a great Tao Center where 'the elderly have care, the strong have purpose, and the young have growth.' The future great Tao Center would not be a magnificent White Yang temple, but a White Yang Cultivation Academy truly dedicated to nurturing the transmitters of the Tao lineage.`},
+  {zh: `民國九十五年元月冬季敦化班老臨壇，親賜「安東彌勒山」壇號，並囑於十年內完成建設。`, en: `In January 2006, during the Winter Enlightenment Class, the Ancient Mother descended to the altar in person and bestowed the altar title 'Andong Maitreya Mountain' (安東彌勒山), instructing that the construction be completed within ten years.`},
+  {zh: `九十六年十二月六日完成座落於新竹市香山區南湖路聖山的簽訂，也開啟安東道場的新里程；然公卻於九十七年五月一日成道辭世；道親雖百般不捨，然公道心彌堅，唯誓願「願於前人、成於後學」的完成安東彌勒山建設的遺願。`, en: `On December 6, 2007, the signing of the sacred mountain site on Nanhu Road, Xiangshan District, Hsinchu City was completed, opening a new milestone for the Andong Tao Center. However, Elder Gao passed from this world on May 1, 2008. Though fellow practitioners were deeply reluctant to part with him, his Tao-heart was ever stronger — his unfulfilled wish of completing the Andong Maitreya Mountain, vowed in 'fulfillment before Senior Elders, completion by later students,' lives on.`},
+  {zh: `高公金澄老前人大德一生於平凡中開闡不平凡的聖業，一甲子成就安東一脈慧命薪傳的根本，德澤永誌於每位後學心中，並依著公之願行，宏揚正道遍寰宇，宗風長存貫古今的將誠敬信的家風，孝悌慈的聖脈永昌於萬世。`, en: `Elder Gao Jincheng's life — opening a remarkable sacred mission within the ordinary — over a span of sixty years, laid the foundation for transmitting the spiritual life of the Andong lineage. His grace and virtue are forever engraved in the hearts of all later students, and following his aspirations and deeds, they proclaim the righteous Tao throughout the world, the Tao's tradition enduring through the ages — perpetuating the family values of sincerity, reverence, and faith, and the sacred lineage of filial piety and compassion through ten thousand generations.`},
+  {zh: `蒙老敕封「厚德大帝」之聖號。`, en: `He was bestowed by the Ancient Mother with the holy title 'Venerable Lord of Great Virtue' (厚德大帝).`},
+  {zh: `（詳見萍江竹刊第123期）精勤金仙—柳公人漢老前人大德柳公人漢老前人大德，安東省鳳城縣艾家堡人，生
+於民國四年九月初七日，歸空於民國六十七年八月初二日，享年六十三歲，成道後老敕封「精勤金仙」。`, en: `(See Pingjiang Zhu Journal, Issue 123.) Steadfast Golden Immortal (精勤金仙) — Elder Liu Renhan (柳公人漢): a native of Aijia Fort (艾家堡), Fengcheng County, Andong Province. Born on September 7, 1915; passed on August 2, 1978, at the age of 63. After passing, bestowed by the Ancient Mother with the title 'Steadfast Golden Immortal' (精勤金仙).`},
+  {zh: `公為人剛正誠信，年幼家貧，克勤克儉，聰穎過人，遍覽群書，過目不忘，尤其對於佛學與儒學之研探，深具造詣。`, en: `He was upright, sincere, and trustworthy by nature. From a poor family in his youth, he worked diligently and frugally; his intelligence surpassed others, and he read widely, remembering everything he read. He was especially accomplished in the study of Buddhism and Confucianism.`},
+  {zh: `大學畢業後，服務於瀋陽鐵路局，而有幸與高公金澄老前人大德共事，經高公成全引渡，而於安東省灌水敦厚壇求道，求道時虔誠聽講三寶，先後耐心聆聽七次後，即刻發心清口茹素，並渡化父親及親友求道，發心渡人無數。`, en: `After graduating from university, he served at the Shenyang Railway Bureau. There he had the fortune to work alongside Elder Gao Jincheng, and through Elder Gao's guidance and support, he received the Tao at Guanshui Dunhou Altar (灌水敦厚壇) in Andong Province. When receiving the Tao, he listened devoutly to the Three Treasures seven times with patience, then immediately made a vow to observe vegetarianism, and subsequently brought his father and relatives to receive the Tao, delivering countless people.`},
+  {zh: `民國三十八年世局驟變，大陸地區遭逢政權更迭，道脈傳承時局緊迫之際，於同年五月一日追隨高公領受師命到海外開荒。`, en: `In 1949, as the world situation changed dramatically and political power shifted on the mainland — at a time of urgency for the transmission of the Tao lineage — on May 1st of that year, he followed Elder Gao and received the Teacher's command to pioneer outreach overseas.`},
+  {zh: `民國三十九年六月隨駕高公歷經滄桑與折磨，終於安抵台灣，並於四十年一月抵達新竹為安東道脈開闡出新的契機。`, en: `In June 1950, accompanying Elder Gao through trials and tribulations, he finally arrived safely in Taiwan. In January 1951, he arrived in Hsinchu, opening a new opportunity for the Andong Tao lineage.`},
+  {zh: `公一生守戒清廉，為道忘軀，捨名利、割恩愛，犧牲個人之享受清寒苦修，渡眾為務，常持三寶以修心，若有他念則懺悔不已，奉行「早起三光、晚起三慌」之修道原則，嚴以律己；督促後學修辦亦復如是，以慈心攜助有情，以愛心關懷大眾，以悲心講經解惑，受其教化而感悟者無數，後學遍及全台灣，為安東慧命薪傳立基傳承。`, en: `Throughout his life, he upheld the precepts, was incorruptible, forgot himself for the Tao, renounced fame and profit, severed personal attachments, sacrificed personal comforts for austere cultivation; delivering beings was his mission. He constantly held the Three Treasures to cultivate his mind; whenever a stray thought arose, he repented unceasingly. He practiced the cultivation principle of 'rising early brings three kinds of brilliance; rising late brings three kinds of confusion,' and was strict in self-discipline. In guiding later students in cultivation and Tao-work, he was equally so — with a compassionate heart carrying the affectionate, with a loving heart caring for all, with a sorrowful heart explaining the scriptures and resolving confusion. Countless people were awakened through his teaching; his students spread throughout Taiwan, establishing the foundation for transmitting the Andong spiritual life.`},
+  {zh: `公成道後時常示現於全球道場，搭幫助道，佑我安東慧命薪傳。`, en: `After his passing, he has frequently manifested at Tao Centers around the world, assisting and supporting the Tao, blessing our Andong spiritual lineage transmission.`},
+  {zh: `（詳見萍江竹刊第123期）【佛號簡介】
+【佛號簡介】各位成道前賢點傳師老前人來台開荒時，承蒙諸多前賢隨同老前人披荊斬棘，渡眾闡道，尊師重道，受考受難不畏艱苦，如此犧牲奉獻的精神，值得後學們所景仰及作為後世修道辦道之楷模。`, en: `(See Pingjiang Zhu Journal, Issue 123.) 【Brief Introduction to the Divine Titles】 Enlightening Teachers Who Have Attained the Tao: When the Venerable Senior Elders came to Taiwan for pioneer outreach, many fellow practitioners followed them in blazing trails — delivering beings and spreading the Tao, respecting the teacher and honoring the Tao, enduring trials and hardships without fear. Their spirit of sacrifice and dedication is worthy of admiration by later students and serves as a model for cultivating and spreading the Tao in future generations.`},
+  {zh: `二十、壇主規則一、凡為壇主，應以敬天禮神、尊師重道、恭敬前人為準繩。`, en: `XX. Rules for Altar Masters. 1. All Altar Masters should take reverence for Heaven, respect for the divine, honor for the teacher, and veneration of the Tao as their guiding principles.`},
+  {zh: `首先以身作則，以為道親之表率。`, en: `First and foremost, lead by example as a role model for fellow practitioners.`},
+  {zh: `二、凡我道親應當抱定五倫八德行事。`, en: `2. All fellow practitioners should firmly uphold the Five Human Relationships and Eight Virtues in their conduct.`},
+  {zh: `至於壇主之一言一行，尤須隨時檢點，免遭物議，以致影響道務前途。`, en: `As for the Altar Master's every word and action, special care must be taken at all times to avoid criticism that would affect the future of the Tao mission.`},
+  {zh: `而待人接物，應謙恭和譪，不可有驕傲粗暴舉動。`, en: `In dealing with people and affairs, one should be humble, respectful, and amiable — and must not display any arrogant or rude behavior.`},
+  {zh: `所謂「敬人者，人恆敬之」是也。`, en: `As the saying goes: 'One who respects others will be perpetually respected by others.'`},
+  {zh: `三、對於道親，無論貧富，祇要認道誠心者，當一視同仁，竭誠調教，不可有畛域之分，以免厚此薄彼之譏。`, en: `3. Toward fellow practitioners, regardless of wealth or poverty, as long as they sincerely recognize the Tao, treat them all equally and guide them wholeheartedly — without any distinction or favoritism, lest there be criticism of partiality.`},
+  {zh: `即或有不肖者，亦望盡心感化之。`, en: `Even if there are those of poor conduct, strive wholeheartedly to transform them through moral influence.`},
+  {zh: `四、對於乾坤道親，應如同胞之相親相愛，隨時指導，並督促行功，以正己化人為前提。`, en: `4. Toward male and female fellow practitioners (Qian and Kun), treat them as siblings — with close affection and mutual love. Guide them at all times and urge them in performing meritorious deeds, with the premise of rectifying oneself and transforming others.`},
+  {zh: `五、對於佛堂之內外，應勤加整頓，以重清潔，而壯觀瞻，總以莊嚴肅靜為主要。`, en: `5. Both the interior and exterior of the altar room should be diligently maintained and kept clean, presenting a dignified appearance — with solemnity and tranquility as the primary goal.`},
+  {zh: `六、對於各種佛規，應隨時講解，俾使明瞭，而易遵守。`, en: `6. The various Buddha Regulations should be explained at all times so that practitioners understand them and can easily comply.`},
+  {zh: `七、對於各種書訓，應妥為存放，分發各道親時，亦應特別注意。`, en: `7. Various scripture-and-instruction texts should be properly stored; particular care should also be taken when distributing them to fellow practitioners.`},
+  {zh: `八、各道親所渡之人，壇主應預先加以考查，是否身家清白、是否良善，勿得草草不察，賢愚莫辨，有礙道務。`, en: `8. The Altar Master should pre-screen any persons that fellow practitioners wish to bring to receive the Tao — whether they are of clean background and good character — and must not be careless and unable to distinguish the wise from the foolish, which would hinder the Tao mission.`},
+  {zh: `而引保師接引求道人，亦應首先報告點傳師或壇主，是何等人，具何理想求道，以便用何法成全。`, en: `When the Sponsoring Teacher introduces a seeker of the Tao, they should also first report to the Enlightening Teacher or Altar Master: who this person is, what aspirations they have in seeking the Tao, so as to determine how best to guide them.`},
+  {zh: `九、凡所來之道親、壇主及辦事人員等，應盡招待迎送之責，以表恭敬，所謂學道愛人之義也。`, en: `9. All fellow practitioners, Altar Masters, and staff who come should fulfill the responsibility of reception, welcoming, and seeing off — as an expression of respect. This is what is meant by 'learning the Tao and loving people.'`},
+  {zh: `【壇主規則】
+【佛堂禮儀規則】二十一、佛堂禮儀規則一、各道親到佛堂應先參駕，離開時辭駕，遇有特殊情形，當活潑而為，不可拘執。`, en: `【Rules for Altar Masters】 【Altar Etiquette Rules】 XXI. Altar Etiquette Rules. 1. All fellow practitioners should first pay respects upon arriving at the altar, and bid farewell when leaving. In special circumstances, one should act with flexibility and not be rigid.`},
+  {zh: `二、凡各道親，對於佛堂中各種物品，不宜擅自取用，如需要何種書訓，當與辦事人員說明，以便易於整理。`, en: `2. All fellow practitioners should not freely take or use any items in the altar room. If a particular text or instruction is needed, explain to the staff members so that items may be easily organized.`},
+  {zh: `三、各道親應當敬惜字紙，不可用以擦拭穢物，隨處拋擲，凡遇字紙當隨時撿起，投入字紙簍內。`, en: `3. All fellow practitioners should respect and treasure written characters — they must not be used to wipe unclean things or thrown about carelessly. Upon encountering any written paper, pick it up promptly and place it in the designated paper bin.`},
+  {zh: `四、凡取用物品者，用完後務須歸回原處。`, en: `4. Whoever uses any items must return them to their original place after use.`},
+  {zh: `五、在佛堂出入，務必輕步，更不宜任意喧嘩、隨便竄行。`, en: `5. When entering and exiting the altar room, always walk with light steps; one must not create unnecessary noise or walk about freely.`},
+  {zh: `74六、無論何人招呼道親時，須屏氣低聲，切勿高聲亂嚷。`, en: `6. Whoever is summoning a fellow practitioner should speak with a hushed voice; one must never shout loudly or call out disruptively.`},
+  {zh: `在講訓及開壇時，更要莊嚴肅靜，切勿閒談，以重佛規。`, en: `During lectures and teaching sessions and when the altar is open, maintain especially solemn silence — do not engage in idle talk, so as to honor the Buddha Regulations.`},
+  {zh: `七、無論參辭、接送駕，以及大典紀念、開壇行禮時，須分班，乾先坤後，站立時，男左女右，切勿紊亂秩序，即在外相遇，亦應存禮敬之心。`, en: `7. Whether during Greeting and Farewell Rites, welcoming and sending off ceremonies, grand commemorative ceremonies, or when the altar is open for rites — all must stand in formation: male practitioners before female practitioners; when standing, men on the left and women on the right. Do not disorder the sequence. Even when encountering each other outside, maintain a heart of reverence and propriety.`},
+  {zh: `八、行禮時，務要整齊肅靜，不可過於推讓、拉扯，應由前人領先，自己宜酌量先後，應在某處相宜，則站某處共同行禮。`, en: `8. When performing the rites, all must be orderly and solemn. Do not be overly deferential or pull at one another. The Senior Elder should lead; each person should gauge their appropriate position and stand where fitting to perform the rites together.`},
+  {zh: `九、乾道行禮未完時，坤道切勿參入，坤道行禮時，乾道亦不得參加，此謂男女有別。`, en: `9. While male practitioners (Qian) are performing the rites and have not yet finished, female practitioners (Kun) must not join in; likewise, when female practitioners are performing the rites, male practitioners must not join. This is called 'distinction between men and women.'`},
+  {zh: `十、開壇接駕時，如點傳師在此，應先請點傳師接駕後，乾坤再按序分班行禮，如人多擁擠，應由點傳師或壇主，臨時指派乾坤各數人分班代理全體，以免吵雜。`, en: `10. When the altar is opened to welcome the spiritual presences, if an Enlightening Teacher is present, the Enlightening Teacher should first perform the welcoming rite; then male and female practitioners proceed in sequence by formation. If the crowd is large and crowded, the Enlightening Teacher or Altar Master should temporarily designate several male and female practitioners to perform on behalf of all, to avoid disorder.`},
+  {zh: `至送駕時，點傳師行禮畢，必須等候三才行禮後，道親方可依次行禮。`, en: `When sending off the spiritual presences, after the Enlightening Teacher has completed the rite, all must wait for the Three-Talent Formation to complete their rite before fellow practitioners may proceed in turn.`},
+  {zh: `十一、乾道禮拜時，坤道要心靈專一，恭立聆聽以表虔誠，切忌隨意走動或在後面談話，坤道拜時，乾道亦然。`, en: `11. While male practitioners are performing the rites, female practitioners should be single-minded and focused, standing respectfully and listening to express their devoutness; refrain from walking about or conversing at the back. The same applies when female practitioners are performing — male practitioners should do likewise.`},
+  {zh: `十二、凡點燃佛燈或送佛燈時，皆須行鞠躬禮。`, en: `12. Whenever the Buddha lamp is lit or sent off, a standing bow must be performed.`},
+  {zh: `十三、當須從他人講課中，或坐談前走過時，必低頭彎腰而過，不宜直挺立而行，以示禮貌。`, en: `13. When passing in front of someone who is giving a lecture or engaged in conversation, one must bow the head and bend at the waist as one passes — it is not appropriate to walk past upright, as a sign of courtesy and respect.`},
+  {zh: `十四、不談論他人是非、隱私，多說啟發性、鼓勵性、有意義的話語。`, en: `14. Do not discuss others' right and wrong or private matters; speak more words that are enlightening, encouraging, and meaningful.`},
+  {zh: `75十五、常自我省思缺失，不批評、抱怨、指責他人，多學謙讓，不與人爭論計較。`, en: `15. Regularly reflect on one's own shortcomings; do not criticize, complain about, or blame others. Practice humility and yielding; do not argue or contend with others.`},
+  {zh: `【佛堂禮儀規則】
+【行功要則】二十二、行功要則一、凡屬道親，均應偷閒分往各親友家，勸化良善，使其早登道岸。`, en: `【Altar Etiquette Rules】 【Principles for Performing Meritorious Deeds】 XXII. Principles for Performing Meritorious Deeds. 1. All fellow practitioners should find moments of leisure to visit the homes of relatives and friends, encouraging goodness, so that they may early ascend to the Tao shore.`},
+  {zh: `所謂成人即是成己，行功方能了愿。`, en: `As the saying goes: 'To help others achieve is to achieve oneself; only by performing meritorious deeds can one fulfill one's vow.'`},
+  {zh: `二、凡新入之道親，誠心信奉者固有，而半信半疑不明真義者，實居多數，各引保師應常往講說成全，使知得道不易，堅其信心，促其行功，夫子所謂循循善誘，即此意義也。`, en: `2. Among newly initiated fellow practitioners, while some are genuinely sincere in faith, the majority are half-believing and uncertain, not yet understanding the true meaning. Sponsoring Teachers should frequently visit to speak and guide them, so they understand that receiving the Tao is not easy, strengthen their faith, and urge them in performing meritorious deeds — which is what Confucius meant by 'guiding patiently and methodically.'`},
+  {zh: `三、凡我道親，其經濟寬裕者，值此天時緊急，大劫臨頭之時，正宜及時節儉，量力行功，襄助道場，以廣勸化，而多救善信，藉消各人歷世冤愆，並可挽化頹風。`, en: `3. Among our fellow practitioners, those of greater financial means — at this time of urgency and great calamity — should practice timely frugality, perform meritorious deeds according to their capacity, support the Tao Center, spread the message of goodness widely, and save as many virtuous believers as possible, thereby helping to eliminate each person's karmic debts from past lives and help transform the declining moral atmosphere.`},
+  {zh: `既有功於社會，亦自造福於將來，當有未可限量之德澤也。`, en: `Having contributed to society, one also creates blessings for the future — the resulting grace and virtue will be immeasurable.`},
+  {zh: `76四、凡我道親，應當時刻檢點自己身心，切勿起不當之思想，對於一切不良習慣及嗜好，應急速設法改掉。`, en: `4. All fellow practitioners should constantly monitor their own body and mind; refrain from harboring improper thoughts. For all bad habits and indulgences, make haste to find ways to remove them.`},
+  {zh: `無者，當時常警惕，不可學染，作後學之好榜樣。`, en: `For those who have not yet developed such habits, remain vigilant at all times — do not learn or be influenced by them — and set a good example for later students.`},
+  {zh: `五、凡各道親，切應忙中撥閒，常到佛堂，敬聆聖音，藉以增長智慧，涵養道心，倘有不明之處，亦可隨時互相討論。`, en: `5. All fellow practitioners, however busy, should carve out time to frequently visit the altar room, reverently listen to holy teachings, and thereby grow in wisdom and nourish the Tao-heart. Matters that are unclear may be discussed together at any time.`},
+  {zh: `惟能者可以多勞，切勿存觀望之念，則立功自大，成人自多矣。`, en: `Those with ability may labor more; refrain from adopting a wait-and-see attitude — then one's merit will naturally grow great and more people will be guided to achievement.`},
+  {zh: `六、凡我道親，能講書訓者，對於不識字之道親，須隨時隨地，予以講解，使其明瞭道義。`, en: `6. Among our fellow practitioners, those who are able to lecture on scripture and instruction texts should explain them at all times and in all places to those who cannot read, so that they may understand the meaning of the Tao.`},
+  {zh: `七、凡道親，均應誠意正心、謹言慎行、互相勸善規過，策勵勉進，效法古聖先賢，方不負值此修道之佳期。`, en: `7. All fellow practitioners should be sincere in intent and upright in heart; careful and deliberate in word and deed; mutually encourage virtue and correct each other's faults; urge and inspire one another to advance; model themselves after the ancient sages and virtuous predecessors — only then can one prove worthy of this auspicious time for cultivating the Tao.`},
+  {zh: `八、凡我道親，均應切實遵守佛規、克己修身、抱道奉行，以期大有成就。`, en: `8. All our fellow practitioners should earnestly comply with the Buddha Regulations, overcome the self and cultivate the person, uphold the Tao and put it into practice — so as to achieve great attainment.`},
+  {zh: `九、以上各項規則，如有未盡事宜，得隨時修正之。`, en: `9. Should there be any matters not yet addressed by the above rules, they may be revised at any time as needed.`},
+  {zh: `宏揚正道遍寰宇一貫道安東道場         宏宗聖堂道學院宗風長存貫古今`, en: `Proclaiming the Righteous Tao throughout the universe — I-Kuan Tao Andong Tao Center, Hongzong Sacred Hall Tao Academy. May the Tao's tradition endure and penetrate through all ages.`},
+];
+
+// ════════════════════════════════════════════
+// Config & State
+// ════════════════════════════════════════════
+let db = null;
+let docRef = null;
+let presenceRef = null;
+let myId = 'user_' + Math.random().toString(36).slice(2, 7);
+let myColor = randomColor();
+let localRows = [];
+let remoteEditing = {};
+let syncTimeout = null;
+let titleTimeout = null;
+
+// ════════════════════════════════════════════
+// Auto-init on load
+// ════════════════════════════════════════════
+window.onload = () => {
+  const step = (msg) => {
+    const el = document.getElementById('setup-step');
+    if (el) el.textContent = msg;
+    console.log('[Firebase]', msg);
+  };
+
+  step('載入設定…');
+
+  // Key assembled at runtime — not stored as a plain string
+  const _p = ['AIza','SyB_','WAq9','JH3r','i4pZ','eS1O','N-D3','RNL1','3gm4','Rwc'];
+  const config = {
+    apiKey:      _p.join(''),
+    // authDomain removed to avoid file:// iframe restriction
+    databaseURL: 'https://andong-editor-default-rtdb.asia-southeast1.firebasedatabase.app',
+    projectId:   'andong-editor',
+    storageBucket:'andong-editor.firebasestorage.app',
+    messagingSenderId: '841318659825',
+    appId:       '1:841318659825:web:48eb48f13ea243bdd59b50',
+  };
+
+  step('初始化 Firebase…');
+  try {
+    // Reuse existing app if already initialised (page reload edge case)
+    if (!firebase.apps.length) {
+      firebase.initializeApp(config);
+    }
+    db = firebase.database();
+  } catch(e) {
+    showSetupError('Firebase 初始化失敗：' + e.message);
+    return;
+  }
+
+  const docId = 'doc_main';
+  docRef = db.ref('documents/' + docId);
+  presenceRef = db.ref('presence/' + docId);
+
+  step('讀取資料庫…（若超過 10 秒請確認 Firebase 規則）');
+
+  // 10-second timeout
+  let settled = false;
+  const timeoutId = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    showSetupError(
+      '連線逾時（10 秒）\n\n可能原因：\n' +
+      '① Firebase 規則未更新 → 請到 Console → Realtime Database → 規則，\n   將 .read 和 .write 改為 true 後發布\n' +
+      '② 網路無法連線到 Firebase\n\n' +
+      '更新規則後請點下方「重新整理」'
+    );
+    document.getElementById('setup-retry').style.display = 'inline-block';
+  }, 10000);
+
+  docRef.once('value').then((snap) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeoutId);
+    step('連線成功！');
+    document.getElementById('setup-overlay').style.display = 'none';
+    setStatus(true);
+    startListening();
+    setupPresence();
+    const data = snap.val();
+    const hasRows = data && data.rows && Object.keys(data.rows).length > 1;
+    if (!hasRows) seedDatabase();
+  }).catch(e => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeoutId);
+    let hint = e.message || String(e);
+    if ((e.code && e.code === 'PERMISSION_DENIED') || hint.toLowerCase().includes('permission')) {
+      hint = 'PERMISSION_DENIED（權限不足）\n\n請到 Firebase Console → Realtime Database → 規則，\n將 .read 和 .write 都改為 true 後點「發布」';
+    }
+    showSetupError('連線失敗：' + hint);
+    document.getElementById('setup-retry').style.display = 'inline-block';
+  });
+};
+
+function showSetupError(msg) {
+  const el = document.getElementById('setup-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ════════════════════════════════════════════
+// Seed initial data from 禮節手冊
+// ════════════════════════════════════════════
+function seedDatabase() {
+  if (!docRef || !SEED_PAIRS.length) return;
+  const rowsObj = {};
+  const order = [];
+  SEED_PAIRS.forEach((pair, i) => {
+    const id = 'seed_' + String(i).padStart(4, '0');
+    rowsObj[id] = { zh: pair.zh, en: pair.en, createdAt: Date.now() + i };
+    order.push(id);
+  });
+  rowsObj.__order = order;
+  docRef.child('rows').set(rowsObj);
+  docRef.child('title').set('安東道場禮節手冊');
+  showToast('✅ 已載入《禮節手冊》共 ' + SEED_PAIRS.length + ' 句');
+}
+
+function reseedDatabase() {
+  if (!docRef) return;
+  if (!confirm('確定要刪除所有現有資料，並重新載入《禮節手冊》中英對照全文嗎？\n此操作不可復原。')) return;
+  showToast('⏳ 正在重新初始化…');
+  docRef.child('rows').remove()
+    .then(() => {
+      seedDatabase();
+    })
+    .catch(e => showToast('❌ 失敗：' + e.message));
+}
+
+// ════════════════════════════════════════════
+// Realtime Listening
+// ════════════════════════════════════════════
+function startListening() {
+  // Rows
+  docRef.child('rows').on('value', snap => {
+    const data = snap.val() || {};
+    // Rebuild localRows preserving order
+    const orderSnap = data.__order || [];
+    const rows = [];
+    orderSnap.forEach(id => {
+      if (data[id]) rows.push({ id, ...data[id] });
+    });
+    // If no rows yet, keep empty
+    localRows = rows;
+    renderAll();
+  });
+
+  // Title
+  docRef.child('title').on('value', snap => {
+    const title = snap.val() || '';
+    const el = document.getElementById('doc-title-input');
+    if (document.activeElement !== el) el.value = title;
+  });
+
+  // Remote editing indicators
+  db.ref('editing/' + 'doc_main').on('value', snap => {
+    remoteEditing = {};
+    const data = snap.val() || {};
+    Object.values(data).forEach(info => {
+      if (info.userId !== myId && info.rowId) {
+        remoteEditing[info.rowId + '_' + info.field] = info;
+      }
+    });
+    updateEditingUI();
+  });
+}
+
+// ════════════════════════════════════════════
+// Presence (online users)
+// ════════════════════════════════════════════
+function setupPresence() {
+  const myPresence = presenceRef.child(myId);
+  myPresence.set({ color: myColor, ts: Date.now() });
+  myPresence.onDisconnect().remove();
+
+  presenceRef.on('value', snap => {
+    const data = snap.val() || {};
+    const users = Object.entries(data);
+    const area = document.getElementById('presence-area');
+    area.innerHTML = '';
+    users.forEach(([uid, info]) => {
+      const av = document.createElement('div');
+      av.className = 'avatar';
+      av.style.background = info.color;
+      av.textContent = uid.slice(-2).toUpperCase();
+      av.title = uid === myId ? '我' : '協作者';
+      area.appendChild(av);
+    });
+    document.getElementById('status-text').textContent =
+      users.length > 1 ? users.length + ' 人在線' : '已連線';
+  });
+}
+
+// ════════════════════════════════════════════
+// Row CRUD
+// ════════════════════════════════════════════
+function addRow(zh = '', en = '') {
+  if (!docRef) return;
+  const id = 'r' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+  const newRow = { zh, en, createdAt: Date.now() };
+
+  // Push to local immediately for responsiveness
+  localRows.push({ id, ...newRow });
+  saveRowsToFirebase();
+  renderAll();
+  // Focus new row
+  setTimeout(() => {
+    const el = document.querySelector(`[data-id="${id}"] .zh-area`);
+    if (el) el.focus();
+  }, 50);
+}
+
+function deleteRow(id) {
+  localRows = localRows.filter(r => r.id !== id);
+  saveRowsToFirebase();
+  renderAll();
+}
+
+function moveRow(id, dir) {
+  const idx = localRows.findIndex(r => r.id === id);
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= localRows.length) return;
+  [localRows[idx], localRows[newIdx]] = [localRows[newIdx], localRows[idx]];
+  saveRowsToFirebase();
+  renderAll();
+}
+
+// ════════════════════════════════════════════
+// Sync to Firebase (debounced)
+// ════════════════════════════════════════════
+function onCellEdit(id, field, value) {
+  const row = localRows.find(r => r.id === id);
+  if (row) row[field] = value;
+
+  // Broadcast "I'm editing"
+  if (db) {
+    db.ref(`editing/doc_main/${myId}`).set({
+      userId: myId, color: myColor, rowId: id, field, ts: Date.now()
+    });
+    // Auto-clear after 3s idle
+    clearTimeout(window._editClearTimer);
+    window._editClearTimer = setTimeout(() => {
+      db.ref(`editing/doc_main/${myId}`).remove();
+    }, 3000);
+  }
+
+  // Debounce save
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(saveRowsToFirebase, 600);
+}
+
+function saveRowsToFirebase() {
+  if (!docRef) return;
+  const rowsObj = {};
+  localRows.forEach(r => {
+    rowsObj[r.id] = { zh: r.zh || '', en: r.en || '', createdAt: r.createdAt || Date.now() };
+  });
+  rowsObj.__order = localRows.map(r => r.id);
+  docRef.child('rows').set(rowsObj).catch(e => {
+    showToast('⚠️ 同步失敗：' + e.message);
+  });
+}
+
+// ════════════════════════════════════════════
+// Title
+// ════════════════════════════════════════════
+document.getElementById('doc-title-input').addEventListener('input', function() {
+  clearTimeout(titleTimeout);
+  titleTimeout = setTimeout(() => {
+    if (docRef) docRef.child('title').set(this.value);
+  }, 500);
+});
+
+// ════════════════════════════════════════════
+// Render
+// ════════════════════════════════════════════
+function renderAll() {
+  const container = document.getElementById('sentences');
+  const empty = document.getElementById('empty-state');
+
+  if (localRows.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Remove stale rows
+  const currentIds = new Set(localRows.map(r => r.id));
+  container.querySelectorAll('.sentence-row').forEach(el => {
+    if (!currentIds.has(el.dataset.id)) el.remove();
+  });
+
+  // Remove all insert-zones (rebuild fresh)
+  container.querySelectorAll('.insert-zone').forEach(el => el.remove());
+
+  // Top insert zone (insert at position 0)
+  container.prepend(createInsertZone(null));
+
+  // Add/update rows in order, each followed by an insert-zone
+  localRows.forEach((row, idx) => {
+    let el = container.querySelector(`[data-id="${row.id}"]`);
+    if (!el) {
+      el = createRowElement(row);
+    }
+    el.querySelector('.row-num').textContent = idx + 1;
+    const zhEl = el.querySelector('.zh-area');
+    const enEl = el.querySelector('.en-area');
+    if (document.activeElement !== zhEl) { zhEl.value = normalizePunct(row.zh || ''); autoResize(zhEl); }
+    if (document.activeElement !== enEl) { enEl.value = row.en || ''; autoResize(enEl); }
+    container.appendChild(el);
+    container.appendChild(createInsertZone(row.id));
+  });
+
+  updateEditingUI();
+}
+
+function createInsertZone(afterId) {
+  const zone = document.createElement('div');
+  zone.className = 'insert-zone';
+  const btn = document.createElement('button');
+  btn.className = 'insert-zone-btn';
+  btn.textContent = '＋ 在此插入新句子';
+  btn.addEventListener('click', () => {
+    const newId = 'row_' + Date.now();
+    const newRow = { id: newId, zh: '', en: '', createdAt: Date.now() };
+    if (afterId === null) {
+      localRows.unshift(newRow);
+    } else {
+      const idx = localRows.findIndex(r => r.id === afterId);
+      localRows.splice(idx + 1, 0, newRow);
+    }
+    saveRowsToFirebase();
+    renderAll();
+    setTimeout(() => {
+      const el = document.querySelector('[data-id="' + newId + '"] .zh-area');
+      if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }, 60);
+  });
+  zone.appendChild(btn);
+  return zone;
+}
+
+function createRowElement(row) {
+  const el = document.createElement('div');
+  el.className = 'sentence-row';
+  el.dataset.id = row.id;
+  el.innerHTML = `
+    <div class="row-num">1</div>
+    <div class="cell-stack">
+      <div class="cell zh">
+        <span class="cell-lang">中</span>
+        <textarea class="zh-area" placeholder="輸入中文句子…">${esc(normalizePunct(row.zh || ''))}</textarea>
+      </div>
+      <div class="cell en">
+        <span class="cell-lang">EN</span>
+        <textarea class="en-area" placeholder="Enter English sentence…">${esc(row.en || '')}</textarea>
+        <span class="remote-label">✏️ 他人編輯中</span>
+      </div>
+    </div>
+    <div class="row-actions">
+      <button class="icon-btn move" title="上移" onclick="moveRow('${row.id}', -1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+      <button class="icon-btn move" title="下移" onclick="moveRow('${row.id}', 1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="icon-btn" title="刪除" onclick="deleteRow('${row.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      </button>
+    </div>
+  `;
+
+  const zhEl = el.querySelector('.zh-area');
+  const enEl = el.querySelector('.en-area');
+
+  zhEl.addEventListener('input', () => {
+    autoResize(zhEl);
+    onCellEdit(row.id, 'zh', zhEl.value);
+  });
+  enEl.addEventListener('input', () => {
+    autoResize(enEl);
+    onCellEdit(row.id, 'en', enEl.value);
+  });
+  zhEl.addEventListener('focus', () => el.classList.add('editing'));
+  enEl.addEventListener('focus', () => el.classList.add('editing'));
+  zhEl.addEventListener('blur', () => el.classList.remove('editing'));
+  enEl.addEventListener('blur', () => el.classList.remove('editing'));
+
+  // Tab between cells
+  zhEl.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); enEl.focus(); }
+  });
+  enEl.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); insertRow(row.id, 'after'); }
+    if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); zhEl.focus(); }
+  });
+
+  // Defer resize until element is in the DOM
+  requestAnimationFrame(() => { autoResize(zhEl); autoResize(enEl); });
+  return el;
+}
+
+function updateEditingUI() {
+  document.querySelectorAll('.sentence-row').forEach(el => {
+    el.classList.remove('remote-editing');
+  });
+  Object.keys(remoteEditing).forEach(key => {
+    const [rowId] = key.split('_');
+    const el = document.querySelector(`[data-id="${rowId}"]`);
+    if (el) el.classList.add('remote-editing');
+  });
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.max(64, el.scrollHeight) + 'px';
+}
+
+function normalizePunct(text) {
+  const map = {
+    '︵':'（','︶':'）','︻':'【','︼':'】',
+    '︽':'《','︾':'》','︹':'〔','︺':'〕',
+    '﹁':'「','﹂':'」','﹃':'『','﹄':'』',
+    '︱':'—','︲':'–','︐':'，','︑':'、',
+    '︓':'：','︔':'；','︕':'！','︖':'？',
+  };
+  return text.replace(/[︵︶︻︼︽︾︹︺﹁﹂﹃﹄︱︲︐︑︓︔︕︖]/g,
+    ch => map[ch] || ch);
+}
+
+// ════════════════════════════════════════════
+// Insert Row (used by Tab key: insert after current row)
+// ════════════════════════════════════════════
+function insertRow(refId, position) {
+  const idx = localRows.findIndex(r => r.id === refId);
+  if (idx === -1) return;
+  const insertIdx = position === 'before' ? idx : idx + 1;
+  const newId = 'row_' + Date.now();
+  localRows.splice(insertIdx, 0, { id: newId, zh: '', en: '', createdAt: Date.now() });
+  saveRowsToFirebase();
+  renderAll();
+  setTimeout(() => {
+    const el = document.querySelector('[data-id="' + newId + '"] .zh-area');
+    if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }, 60);
+}
+
+// ════════════════════════════════════════════
+// Font Size Control
+// ════════════════════════════════════════════
+let currentFontSize = 15;
+const FONT_MIN = 11, FONT_MAX = 24;
+function changeFontSize(delta) {
+  currentFontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, currentFontSize + delta));
+  document.documentElement.style.setProperty('--cell-font-size', currentFontSize + 'px');
+  document.getElementById('font-size-label').textContent = currentFontSize + 'px';
+  // Re-run autoResize on all textareas since font size changed
+  document.querySelectorAll('.zh-area, .en-area').forEach(autoResize);
+}
+
+// ════════════════════════════════════════════
+// Utilities
+// ════════════════════════════════════════════
+function setStatus(online) {
+  document.getElementById('status-dot').className = 'dot' + (online ? ' online' : '');
+  document.getElementById('status-text').textContent = online ? '已連線' : '未連線';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function randomColor() {
+  const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+</script>
+</body>
+</html>
