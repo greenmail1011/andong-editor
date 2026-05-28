@@ -23,6 +23,8 @@
       --muted: #8892a4;
       --zh-bg: #fafbff;
       --en-bg: #fffaf5;
+      --ja-bg: #f5fff8;
+      --vi-bg: #fff8f0;
       --online: #22c55e;
       --radius: 10px;
       --cell-font-size: 15px;
@@ -325,7 +327,7 @@
     /* ── Trash view ── */
     .trash-row {
       display: grid;
-      grid-template-columns: 40px 1fr 1fr 100px;
+      grid-template-columns: 40px 1fr 1fr 1fr 1fr 100px;
       border-bottom: 1px solid var(--border);
     }
     .trash-num {
@@ -341,6 +343,14 @@
     .trash-en {
       padding: 12px 16px; font-size: 13px; line-height: 1.8;
       background: var(--en-bg); border-right: 1px solid var(--border);
+    }
+    .trash-ja {
+      padding: 12px 16px; font-size: 13px; line-height: 1.8;
+      background: var(--ja-bg); border-right: 1px solid var(--border);
+    }
+    .trash-vi {
+      padding: 12px 16px; font-size: 13px; line-height: 1.8;
+      background: var(--vi-bg); border-right: 1px solid var(--border);
     }
     .trash-actions {
       display: flex; flex-direction: column; align-items: center;
@@ -432,7 +442,7 @@
     #bt-scroll { flex: 1; overflow-y: auto; }
     .bt-header {
       display: grid;
-      grid-template-columns: 40px 1fr 1fr 44px;
+      grid-template-columns: 40px 1fr 1fr 1fr 1fr 44px;
       position: sticky; top: 166px;
       background: var(--surface);
       border-bottom: 2px solid var(--border);
@@ -481,7 +491,7 @@
     /* ── Editable bilingual rows ── */
     .bt-row-edit {
       display: grid;
-      grid-template-columns: 40px 1fr 1fr 44px;
+      grid-template-columns: 40px 1fr 1fr 1fr 1fr 44px;
       border-bottom: 1px solid var(--border);
       transition: box-shadow 0.2s;
     }
@@ -490,6 +500,8 @@
     .bt-row-edit.remote-editing { box-shadow: 0 0 0 2px rgba(245,158,11,0.15) inset; }
     .bt-zh-cell { background: var(--zh-bg); border-right: 1px solid var(--border); }
     .bt-en-cell { background: var(--en-bg); border-right: 1px solid var(--border); }
+    .bt-ja-cell { background: var(--ja-bg); border-right: 1px solid var(--border); }
+    .bt-vi-cell { background: var(--vi-bg); border-right: 1px solid var(--border); }
     .bt-row-edit textarea {
       width: 100%;
       min-height: 64px;
@@ -513,6 +525,76 @@
       gap: 4px;
       padding: 6px;
       background: var(--bg);
+    }
+
+    /* ── Mobile language chip labels (hidden on desktop) ── */
+    .bt-lang-chip {
+      display: none;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 2px 8px 0;
+      opacity: 0.7;
+    }
+
+    /* ── Mobile bottom nav bar ── */
+    #mobile-bottom-bar {
+      display: none;
+    }
+
+    /* ── Mobile jump overlay ── */
+    #mobile-jump-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 300;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    #mobile-jump-overlay.open { display: flex; }
+    #mobile-jump-box {
+      background: var(--surface);
+      border-radius: 16px 16px 0 0;
+      padding: 24px 24px 40px;
+      width: 100%;
+      max-width: 480px;
+    }
+    #mobile-jump-box h3 { font-size: 16px; margin-bottom: 16px; }
+    #mobile-jump-input {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 18px;
+      outline: none;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    #mobile-jump-input:focus { border-color: var(--accent); }
+    #mobile-jump-go {
+      width: 100%;
+      margin-top: 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #mobile-jump-cancel {
+      width: 100%;
+      margin-top: 8px;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
     }
 
     /* ══════════════════════════════
@@ -566,16 +648,21 @@
 
       /* Sticky offsets adjusted for smaller header */
       #inline-view-bar { top: 100px; }
-      .bt-header { position: sticky; top: 154px !important; }
+      .bt-header { display: none !important; }
 
-      /* Bilingual edit view — stack zh/en vertically on mobile */
+      /* Show language chip labels on mobile */
+      .bt-lang-chip { display: block; }
+
+      /* Bilingual edit view — stack all 4 languages vertically on mobile */
       .bt-row-edit {
         grid-template-columns: 32px 1fr 40px !important;
-        grid-template-rows: auto auto;
+        grid-template-rows: auto auto auto auto;
       }
       .bt-row-edit .bt-num {
         grid-column: 1 / 2;
-        grid-row: 1 / 3;
+        grid-row: 1 / 5;
+        font-size: 12px;
+        padding: 16px 4px;
       }
       .bt-row-edit .bt-zh-cell {
         grid-column: 2 / 3;
@@ -587,19 +674,82 @@
         grid-column: 2 / 3;
         grid-row: 2;
         border-right: none !important;
+        border-bottom: 1px solid var(--border);
+      }
+      .bt-row-edit .bt-ja-cell {
+        grid-column: 2 / 3;
+        grid-row: 3;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border);
+      }
+      .bt-row-edit .bt-vi-cell {
+        grid-column: 2 / 3;
+        grid-row: 4;
+        border-right: none !important;
       }
       .bt-row-edit .bt-row-actions {
         grid-column: 3 / 4;
-        grid-row: 1 / 3;
+        grid-row: 1 / 5;
+        gap: 8px;
+        padding: 8px 4px;
       }
-      .bt-header { display: none !important; }
+      /* Larger touch targets for action buttons */
+      .bt-row-actions button {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 16px !important;
+      }
+      /* Textarea padding tighter on mobile */
+      .bt-row-edit textarea {
+        padding: 6px 10px 8px !important;
+        min-height: 48px !important;
+        font-size: 14px !important;
+      }
+
+      /* Bottom padding so content isn't hidden by bottom bar */
+      #sentences, #inline-view { padding: 0 10px 80px; }
+
+      /* Hide top toolbar on mobile — replaced by bottom bar */
+      #toolbar { display: none !important; }
+
+      /* Show mobile bottom bar */
+      #mobile-bottom-bar {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: 60px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        z-index: 150;
+        align-items: center;
+        justify-content: space-around;
+        padding: 0 4px;
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+      .mb-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 6px 2px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: color 0.15s, background 0.15s;
+      }
+      .mb-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+      .mb-btn.active { color: var(--accent); background: var(--accent-light); }
 
       /* Full-text view */
       .ft-fulltext-block { padding: 0 4px; }
       .ft-para { font-size: 14px !important; }
 
       /* Sentences (read-only rows) */
-      #sentences, #inline-view { padding: 0 10px 60px; }
       .sentence-row { grid-template-columns: 32px 1fr 36px; }
       .col-label { padding: 4px 8px; }
       #col-headers { padding: 0 10px; }
@@ -647,6 +797,14 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
     英文全文
   </button>
+  <button class="btn" id="btn-ja" onclick="toggleInlineView('ja')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    日文全文
+  </button>
+  <button class="btn" id="btn-vi" onclick="toggleInlineView('vi')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    越文全文
+  </button>
   <button class="btn" id="btn-trash" onclick="toggleInlineView('trash')" title="刪除暫存區（保留一個月）">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 11a2 2 0 002 2h8a2 2 0 002-2L19 8"/><path d="M10 12v5M14 12v5"/></svg>
     暫存區<span class="trash-badge" id="trash-count"></span>
@@ -686,6 +844,45 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- ══ Mobile Bottom Navigation Bar ══ -->
+<div id="mobile-bottom-bar">
+  <button class="mb-btn active" id="mb-btn-bilingual" onclick="mbView('bilingual')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+    逐句
+  </button>
+  <button class="mb-btn" id="mb-btn-zh" onclick="mbView('zh')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    中文
+  </button>
+  <button class="mb-btn" id="mb-btn-en" onclick="mbView('en')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    English
+  </button>
+  <button class="mb-btn" id="mb-btn-ja" onclick="mbView('ja')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    日文
+  </button>
+  <button class="mb-btn" id="mb-btn-vi" onclick="mbView('vi')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+    越文
+  </button>
+  <button class="mb-btn" id="mb-btn-jump" onclick="openMobileJump()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+    跳至
+  </button>
+</div>
+
+<!-- ══ Mobile Jump Overlay ══ -->
+<div id="mobile-jump-overlay" onclick="closeMobileJump(event)">
+  <div id="mobile-jump-box">
+    <h3>跳至第幾句？</h3>
+    <input id="mobile-jump-input" type="number" min="1" max="280" placeholder="例：42" inputmode="numeric"
+      onkeydown="if(event.key==='Enter') doMobileJump()">
+    <button id="mobile-jump-go" onclick="doMobileJump()">跳過去</button>
+    <button id="mobile-jump-cancel" onclick="closeMobileJump()">取消</button>
+  </div>
+</div>
 
 <script>
 const SEED_PAIRS = [
@@ -1297,12 +1494,13 @@ function deleteRow(id) {
   if (idx === -1) return;
   const row = localRows[idx];
 
-  // Move to trash
+  // Move to trash (save original index for exact restore)
   if (docRef) {
     docRef.child('trash/' + id).set({
-      zh: row.zh || '', en: row.en || '',
+      zh: row.zh || '', en: row.en || '', ja: row.ja || '', vi: row.vi || '',
       createdAt: row.createdAt || 0,
-      deletedAt: Date.now()
+      deletedAt: Date.now(),
+      deletedIndex: idx
     });
   }
 
@@ -1315,16 +1513,21 @@ function deleteRow(id) {
 function restoreRow(id) {
   const item = localTrash[id];
   if (!item) return;
-  const restoredRow = { id, zh: item.zh, en: item.en, createdAt: item.createdAt || Date.now() };
+  const restoredRow = { id, zh: item.zh, en: item.en, ja: item.ja || '', vi: item.vi || '', createdAt: item.createdAt || Date.now() };
 
-  // Insert at the correct position based on ID ordering
-  const rowOrder = r => {
-    const m = r.id.match(/(\d+)$/);
-    return m ? parseInt(m[1]) : (r.createdAt || 0);
-  };
-  const order = rowOrder(restoredRow);
-  let insertIdx = localRows.findIndex(r => rowOrder(r) > order);
-  if (insertIdx === -1) insertIdx = localRows.length;
+  // Restore to original position if saved, otherwise fall back to ID-order
+  let insertIdx;
+  if (typeof item.deletedIndex === 'number') {
+    insertIdx = Math.min(item.deletedIndex, localRows.length);
+  } else {
+    const rowOrder = r => {
+      const m = r.id.match(/(\d+)$/);
+      return m ? parseInt(m[1]) : (r.createdAt || 0);
+    };
+    const order = rowOrder(restoredRow);
+    insertIdx = localRows.findIndex(r => rowOrder(r) > order);
+    if (insertIdx === -1) insertIdx = localRows.length;
+  }
   localRows.splice(insertIdx, 0, restoredRow);
 
   docRef.child('trash/' + id).remove();
@@ -1376,7 +1579,7 @@ function saveRowsToFirebase() {
   if (!docRef) return;
   const rowsObj = {};
   localRows.forEach(r => {
-    rowsObj[r.id] = { zh: r.zh || '', en: r.en || '', createdAt: r.createdAt || Date.now() };
+    rowsObj[r.id] = { zh: r.zh || '', en: r.en || '', ja: r.ja || '', vi: r.vi || '', createdAt: r.createdAt || Date.now() };
   });
   rowsObj.__order = localRows.map(r => r.id);
   docRef.child('rows').set(rowsObj).catch(e => {
@@ -1452,6 +1655,9 @@ function renderBilingualView() {
   const content = document.getElementById('inline-view-content');
   if (!content) return;
 
+  // Save scroll position to avoid jump on re-render
+  const savedScroll = window.scrollY;
+
   // Ensure sticky header exists
   if (!content.querySelector('.bt-header')) {
     const hdr = document.createElement('div');
@@ -1460,6 +1666,8 @@ function renderBilingualView() {
       <div class="bt-header-cell"></div>
       <div class="bt-header-cell">中文</div>
       <div class="bt-header-cell">English</div>
+      <div class="bt-header-cell">日本語</div>
+      <div class="bt-header-cell">Tiếng Việt</div>
       <div class="bt-header-cell"></div>`;
     content.prepend(hdr);
   }
@@ -1473,9 +1681,7 @@ function renderBilingualView() {
   // Remove all insert-zones and rebuild
   content.querySelectorAll('.insert-zone').forEach(el => el.remove());
 
-  // Top insert zone (after header)
-  const hdr = content.querySelector('.bt-header');
-  hdr.insertAdjacentElement('afterend', createInsertZone(null));
+  // No top insert zone — avoids gap below sticky header
 
   // Add / update rows in order
   localRows.forEach((row, idx) => {
@@ -1484,11 +1690,18 @@ function renderBilingualView() {
     el.querySelector('.bt-num').textContent = idx + 1;
     const zhEl = el.querySelector('.zh-area');
     const enEl = el.querySelector('.en-area');
+    const jaEl = el.querySelector('.ja-area');
+    const viEl = el.querySelector('.vi-area');
     if (document.activeElement !== zhEl) { zhEl.value = normalizePunct(row.zh || ''); autoResize(zhEl); }
     if (document.activeElement !== enEl) { enEl.value = row.en || ''; autoResize(enEl); }
+    if (document.activeElement !== jaEl) { jaEl.value = row.ja || ''; autoResize(jaEl); }
+    if (document.activeElement !== viEl) { viEl.value = row.vi || ''; autoResize(viEl); }
     content.appendChild(el);
     content.appendChild(createInsertZone(row.id));
   });
+
+  // Restore scroll position after re-render
+  if (savedScroll > 0) window.scrollTo(0, savedScroll);
 }
 
 function createBilingualRowElement(row) {
@@ -1498,10 +1711,20 @@ function createBilingualRowElement(row) {
   el.innerHTML = `
     <div class="bt-num">1</div>
     <div class="bt-zh-cell">
+      <div class="bt-lang-chip">中文</div>
       <textarea class="zh-area" placeholder="輸入中文句子…">${esc(normalizePunct(row.zh || ''))}</textarea>
     </div>
     <div class="bt-en-cell">
+      <div class="bt-lang-chip">English</div>
       <textarea class="en-area" placeholder="Enter English sentence…">${esc(row.en || '')}</textarea>
+    </div>
+    <div class="bt-ja-cell">
+      <div class="bt-lang-chip">日本語</div>
+      <textarea class="ja-area" placeholder="日本語を入力…">${esc(row.ja || '')}</textarea>
+    </div>
+    <div class="bt-vi-cell">
+      <div class="bt-lang-chip">Tiếng Việt</div>
+      <textarea class="vi-area" placeholder="Nhập tiếng Việt…">${esc(row.vi || '')}</textarea>
     </div>
     <div class="bt-row-actions">
       <button class="icon-btn" title="刪除" onclick="deleteRow('${row.id}')">
@@ -1511,20 +1734,32 @@ function createBilingualRowElement(row) {
 
   const zhEl = el.querySelector('.zh-area');
   const enEl = el.querySelector('.en-area');
+  const jaEl = el.querySelector('.ja-area');
+  const viEl = el.querySelector('.vi-area');
   zhEl.addEventListener('input', () => { autoResize(zhEl); onCellEdit(row.id, 'zh', zhEl.value); });
   enEl.addEventListener('input', () => { autoResize(enEl); onCellEdit(row.id, 'en', enEl.value); });
-  zhEl.addEventListener('focus', () => el.classList.add('editing'));
-  enEl.addEventListener('focus', () => el.classList.add('editing'));
-  zhEl.addEventListener('blur',  () => el.classList.remove('editing'));
-  enEl.addEventListener('blur',  () => el.classList.remove('editing'));
+  jaEl.addEventListener('input', () => { autoResize(jaEl); onCellEdit(row.id, 'ja', jaEl.value); });
+  viEl.addEventListener('input', () => { autoResize(viEl); onCellEdit(row.id, 'vi', viEl.value); });
+  [zhEl, enEl, jaEl, viEl].forEach(el2 => {
+    el2.addEventListener('focus', () => el.classList.add('editing'));
+    el2.addEventListener('blur',  () => el.classList.remove('editing'));
+  });
   zhEl.addEventListener('keydown', e => {
     if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); enEl.focus(); }
   });
   enEl.addEventListener('keydown', e => {
-    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); insertRow(row.id, 'after'); }
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); jaEl.focus(); }
     if (e.key === 'Tab' && e.shiftKey)  { e.preventDefault(); zhEl.focus(); }
   });
-  requestAnimationFrame(() => { autoResize(zhEl); autoResize(enEl); });
+  jaEl.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); viEl.focus(); }
+    if (e.key === 'Tab' && e.shiftKey)  { e.preventDefault(); enEl.focus(); }
+  });
+  viEl.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); insertRow(row.id, 'after'); }
+    if (e.key === 'Tab' && e.shiftKey)  { e.preventDefault(); jaEl.focus(); }
+  });
+  requestAnimationFrame(() => { autoResize(zhEl); autoResize(enEl); autoResize(jaEl); autoResize(viEl); });
   return el;
 }
 
@@ -1726,14 +1961,14 @@ function openInlineView(view) {
   currentInlineView = view;
 
   // Update toolbar button states
-  ['bilingual', 'zh', 'en', 'trash'].forEach(v => {
+  ['bilingual', 'zh', 'en', 'ja', 'vi', 'trash'].forEach(v => {
     document.getElementById('btn-' + v).classList.toggle('primary', v === view);
   });
   const scanBtn = document.getElementById('btn-scan');
   if (scanBtn) scanBtn.style.fontWeight = view === 'scan' ? '700' : '';
 
   // Titles
-  const titles = { bilingual: '逐句翻譯', zh: '中文全文', en: '英文全文', trash: '刪除暫存區（保留一個月）', scan: '掃描文本' };
+  const titles = { bilingual: '逐句翻譯', zh: '中文全文', en: '英文全文', ja: '日文全文', vi: '越文全文', trash: '刪除暫存區（保留一個月）', scan: '掃描文本' };
   document.getElementById('inline-view-title').textContent = titles[view] || '';
 
   // Populate content
@@ -1745,6 +1980,10 @@ function openInlineView(view) {
     content.innerHTML = buildFulltextHtml('zh');
   } else if (view === 'en') {
     content.innerHTML = buildFulltextHtml('en');
+  } else if (view === 'ja') {
+    content.innerHTML = buildFulltextHtml('ja');
+  } else if (view === 'vi') {
+    content.innerHTML = buildFulltextHtml('vi');
   } else if (view === 'trash') {
     renderTrashView();
   } else if (view === 'scan') {
@@ -1755,6 +1994,12 @@ function openInlineView(view) {
   document.getElementById('inline-view-bar').querySelector('button.btn').style.display =
     (view === 'trash' || view === 'bilingual' || view === 'scan') ? 'none' : '';
 
+  // ja/vi fulltext may be empty — show placeholder
+  if ((view === 'ja' || view === 'vi') && !localRows.some(r => (r[view] || '').trim())) {
+    const lang = view === 'ja' ? '日文' : '越文';
+    content.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted);font-size:14px;">尚未輸入${lang}翻譯，請在逐句翻譯視圖中填入。</div>`;
+  }
+
   // Show inline view, hide editor
   document.getElementById('inline-view').style.display = 'block';
   document.getElementById('col-headers').style.display = 'none';
@@ -1762,9 +2007,39 @@ function openInlineView(view) {
   document.getElementById('empty-state').style.display = 'none';
 }
 
+// ── Mobile bottom bar helpers ─────────────────────────────────────
+function mbView(view) {
+  document.querySelectorAll('.mb-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('mb-btn-' + view);
+  if (btn) btn.classList.add('active');
+  toggleInlineView(view);
+}
+
+function openMobileJump() {
+  document.getElementById('mobile-jump-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('mobile-jump-input').focus(), 100);
+}
+
+function closeMobileJump(event) {
+  if (!event || event.target === document.getElementById('mobile-jump-overlay')) {
+    document.getElementById('mobile-jump-overlay').classList.remove('open');
+    document.getElementById('mobile-jump-input').value = '';
+  }
+}
+
+function doMobileJump() {
+  const n = parseInt(document.getElementById('mobile-jump-input').value);
+  if (!n || n < 1 || n > localRows.length) return;
+  closeMobileJump();
+  const content = document.getElementById('inline-view-content');
+  const rows = content ? content.querySelectorAll('.bt-row-edit') : [];
+  if (rows[n - 1]) rows[n - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// ─────────────────────────────────────────────────────────────────
+
 function closeInlineView() {
   currentInlineView = null;
-  ['bilingual', 'zh', 'en', 'trash'].forEach(v => {
+  ['bilingual', 'zh', 'en', 'ja', 'vi', 'trash'].forEach(v => {
     document.getElementById('btn-' + v).classList.remove('primary');
   });
   const scanBtn = document.getElementById('btn-scan');
@@ -1796,10 +2071,12 @@ function renderTrashView() {
     return;
   }
 
-  const header = `<div class="bt-header" style="grid-template-columns:40px 1fr 1fr 100px;">
+  const header = `<div class="bt-header" style="grid-template-columns:40px 1fr 1fr 1fr 1fr 100px;">
     <div class="bt-header-cell"></div>
     <div class="bt-header-cell">中文</div>
     <div class="bt-header-cell">English</div>
+    <div class="bt-header-cell">日本語</div>
+    <div class="bt-header-cell">Tiếng Việt</div>
     <div class="bt-header-cell"></div>
   </div>`;
 
@@ -1813,6 +2090,8 @@ function renderTrashView() {
       <div class="trash-num">${i + 1}</div>
       <div class="trash-zh">${esc(normalizePunct(item.zh || ''))}</div>
       <div class="trash-en">${esc(item.en || '')}</div>
+      <div class="trash-ja">${esc(item.ja || '')}</div>
+      <div class="trash-vi">${esc(item.vi || '')}</div>
       <div class="trash-actions">
         <button class="restore-btn" onclick="restoreRow('${id}')">復原</button>
         <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.4;">${dateStr}<br>剩 ${daysLeft} 天</div>
@@ -1833,7 +2112,11 @@ function buildFulltextHtml(view) {
     if (pageNum !== undefined) {
       frags.push(`<div class="ft-page-sep"><span>第 ${pageNum} 頁</span></div>`);
     }
-    const text = view === 'zh' ? normalizePunct(r.zh || '') : (r.en || '');
+    let text;
+    if (view === 'zh') text = normalizePunct(r.zh || '');
+    else if (view === 'ja') text = r.ja || '';
+    else if (view === 'vi') text = r.vi || '';
+    else text = r.en || '';
     if (text.trim()) frags.push(`<p class="ft-para">${esc(text)}</p>`);
   });
   const id = view === 'zh' ? ' id="ft-zh-text"' : '';
@@ -1864,7 +2147,7 @@ function copyInlineView() {
     text = lines.join('\n');
   }
   navigator.clipboard.writeText(text).then(() =>
-    showToast('✅ 已複製' + { bilingual:'逐句對照', zh:'中文全文', en:'英文全文' }[currentInlineView])
+    showToast('✅ 已複製' + ({ bilingual:'逐句對照', zh:'中文全文', en:'英文全文', ja:'日文全文', vi:'越文全文' }[currentInlineView] || ''))
   );
 }
 
