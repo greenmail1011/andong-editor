@@ -514,6 +514,96 @@
       padding: 6px;
       background: var(--bg);
     }
+
+    /* ══════════════════════════════
+       Mobile Responsive  ≤ 640px
+    ══════════════════════════════ */
+    @media (max-width: 640px) {
+
+      /* Header */
+      header {
+        padding: 0 10px;
+        height: 48px;
+        gap: 8px;
+      }
+      .logo { font-size: 14px; letter-spacing: 0; }
+      #doc-title-input {
+        font-size: 13px;
+        min-width: 60px;
+        max-width: 120px;
+      }
+      #btn-scan {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      #presence-area { display: none; }
+      #status-bar span { display: none; } /* keep dot, hide text */
+
+      /* Toolbar — horizontal scroll so buttons stay on one line */
+      #toolbar {
+        padding: 8px 10px;
+        gap: 6px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        top: 48px; /* header is now 48px */
+      }
+      #toolbar::-webkit-scrollbar { display: none; }
+
+      .btn {
+        padding: 6px 10px;
+        font-size: 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .btn svg { display: none; } /* hide icons, save width */
+
+      /* Font size control */
+      #toolbar > div:last-child {
+        flex-shrink: 0;
+      }
+
+      /* Sticky offsets adjusted for smaller header */
+      #inline-view-bar { top: 100px; }
+      .bt-header { position: sticky; top: 154px !important; }
+
+      /* Bilingual edit view — stack zh/en vertically on mobile */
+      .bt-row-edit {
+        grid-template-columns: 32px 1fr 40px !important;
+        grid-template-rows: auto auto;
+      }
+      .bt-row-edit .bt-num {
+        grid-column: 1 / 2;
+        grid-row: 1 / 3;
+      }
+      .bt-row-edit .bt-zh-cell {
+        grid-column: 2 / 3;
+        grid-row: 1;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border);
+      }
+      .bt-row-edit .bt-en-cell {
+        grid-column: 2 / 3;
+        grid-row: 2;
+        border-right: none !important;
+      }
+      .bt-row-edit .bt-row-actions {
+        grid-column: 3 / 4;
+        grid-row: 1 / 3;
+      }
+      .bt-header { display: none !important; }
+
+      /* Full-text view */
+      .ft-fulltext-block { padding: 0 4px; }
+      .ft-para { font-size: 14px !important; }
+
+      /* Sentences (read-only rows) */
+      #sentences, #inline-view { padding: 0 10px 60px; }
+      .sentence-row { grid-template-columns: 32px 1fr 36px; }
+      .col-label { padding: 4px 8px; }
+      #col-headers { padding: 0 10px; }
+    }
   </style>
 </head>
 <body>
