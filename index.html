@@ -395,7 +395,7 @@
       top: 112px;
       background: var(--bg);
       z-index: 10;
-      padding: 10px 0;
+      padding: 8px 0 0;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -717,14 +717,15 @@
         display: flex;
         position: fixed;
         bottom: 0; left: 0; right: 0;
-        height: 60px;
+        min-height: 60px;
+        padding-bottom: max(env(safe-area-inset-bottom), 8px);
         background: var(--surface);
         border-top: 1px solid var(--border);
         z-index: 150;
         align-items: center;
         justify-content: space-around;
-        padding: 0 4px;
-        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: 4px;
+        padding-right: 4px;
       }
       .mb-btn {
         flex: 1;
@@ -748,6 +749,7 @@
       /* Full-text view */
       .ft-fulltext-block { padding: 0 4px; }
       .ft-para { font-size: 14px !important; }
+      .ft-fulltext { padding-top: 12px !important; }
 
       /* Sentences (read-only rows) */
       .sentence-row { grid-template-columns: 32px 1fr 36px; }
