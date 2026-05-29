@@ -1388,7 +1388,13 @@ function startListening() {
     });
     // If no rows yet, keep empty
     localRows = rows;
+    const firstLoad = currentInlineView === null && rows.length > 0;
     renderAll();
+    // Auto-open bilingual view on first data load
+    if (firstLoad) {
+      openInlineView('bilingual');
+      document.getElementById('mb-btn-bilingual')?.classList.add('active');
+    }
   });
 
   // Title
