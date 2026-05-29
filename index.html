@@ -395,7 +395,7 @@
       top: 112px;
       background: var(--bg);
       z-index: 10;
-      padding: 8px 0 0;
+      padding: 6px 0;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -443,7 +443,7 @@
     .bt-header {
       display: grid;
       grid-template-columns: 40px 1fr 1fr 1fr 1fr 44px;
-      position: sticky; top: 166px;
+      position: sticky; top: 149px;
       background: var(--surface);
       border-bottom: 2px solid var(--border);
       z-index: 1;
@@ -646,8 +646,8 @@
         flex-shrink: 0;
       }
 
-      /* Sticky offsets adjusted for smaller header — toolbar hidden, so bar sits right below header */
-      #inline-view-bar { top: 48px; }
+      /* On mobile, inline-view-bar is sticky right below header (toolbar hidden) */
+      #inline-view-bar { position: sticky; top: 48px; background: var(--bg); z-index: 10; padding: 6px 0; border-bottom: 1px solid var(--border); margin: 0; }
       .bt-header { display: none !important; }
 
       /* Show language chip labels on mobile */
