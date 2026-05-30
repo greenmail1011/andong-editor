@@ -78,6 +78,7 @@
       background: var(--muted);
       transition: background 0.3s;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .dot.online { background: var(--online); }
     #online-count { font-size: 12px; color: var(--muted); }
 
@@ -847,6 +848,12 @@
 
 <div id="toast"></div>
 
+<!-- ══ Data Loading Indicator ══ -->
+<div id="data-loading" style="display:none;position:fixed;inset:0;z-index:200;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div id="data-loading-spinner" style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <div style="font-size:15px;color:var(--muted);">載入資料中，請稍候…</div>
+</div>
+
 <!-- ══ Mobile Bottom Navigation Bar ══ -->
 <div id="mobile-bottom-bar">
   <button class="mb-btn active" id="mb-btn-bilingual" onclick="mbView('bilingual')">
@@ -1321,11 +1328,11 @@ window.onload = () => {
     step('連線成功！');
     document.getElementById('setup-overlay').style.display = 'none';
     setStatus(true);
-    startListening();
-    setupPresence();
     const data = snap.val();
     const hasRows = data && data.rows && Object.keys(data.rows).length > 1;
     if (!hasRows) seedDatabase();
+    startListening(hasRows ? data.rows : null);
+    setupPresence();
   }).catch(e => {
     if (settled) return;
     settled = true;
@@ -1378,25 +1385,36 @@ function reseedDatabase() {
 // ════════════════════════════════════════════
 // Realtime Listening
 // ════════════════════════════════════════════
-function startListening() {
-  // Rows
+function applyRowsSnapshot(data) {
+  const orderSnap = (data || {}).__order || [];
+  const rows = [];
+  orderSnap.forEach(id => {
+    if (data[id]) rows.push({ id, ...data[id] });
+  });
+  localRows = rows;
+  const firstLoad = currentInlineView === null && rows.length > 0;
+  renderAll();
+  if (firstLoad) {
+    openInlineView('bilingual');
+    document.getElementById('mb-btn-bilingual')?.classList.add('active');
+  }
+}
+
+function startListening(initialRowsData) {
+  const loadingEl = document.getElementById('data-loading');
+
+  // If we already have data from the initial once() read, render immediately
+  if (initialRowsData) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    applyRowsSnapshot(initialRowsData);
+  } else {
+    if (loadingEl) loadingEl.style.display = 'flex';
+  }
+
+  // Rows — listen for subsequent changes
   docRef.child('rows').on('value', snap => {
-    const data = snap.val() || {};
-    // Rebuild localRows preserving order
-    const orderSnap = data.__order || [];
-    const rows = [];
-    orderSnap.forEach(id => {
-      if (data[id]) rows.push({ id, ...data[id] });
-    });
-    // If no rows yet, keep empty
-    localRows = rows;
-    const firstLoad = currentInlineView === null && rows.length > 0;
-    renderAll();
-    // Auto-open bilingual view on first data load
-    if (firstLoad) {
-      openInlineView('bilingual');
-      document.getElementById('mb-btn-bilingual')?.classList.add('active');
-    }
+    if (loadingEl) loadingEl.style.display = 'none';
+    applyRowsSnapshot(snap.val() || {});
   });
 
   // Title
@@ -2115,17 +2133,26 @@ function renderTrashView() {
 
 function buildFulltextHtml(view) {
   const frags = [];
+  let pendingPageNum = null; // hold separator until a non-empty row confirms there's content
   localRows.forEach(r => {
+    // Record page separator but don't emit yet
     const pageNum = localPageBreaks[r.id];
-    if (pageNum !== undefined) {
-      frags.push(`<div class="ft-page-sep"><span>第 ${pageNum} 頁</span></div>`);
-    }
+    if (pageNum !== undefined) pendingPageNum = pageNum;
+
     let text;
     if (view === 'zh') text = normalizePunct(r.zh || '');
     else if (view === 'ja') text = r.ja || '';
     else if (view === 'vi') text = r.vi || '';
     else text = r.en || '';
-    if (text.trim()) frags.push(`<p class="ft-para">${esc(text)}</p>`);
+
+    if (text.trim()) {
+      // Emit pending separator only when there is actual content to follow
+      if (pendingPageNum !== null) {
+        frags.push(`<div class="ft-page-sep"><span>第 ${pendingPageNum} 頁</span></div>`);
+        pendingPageNum = null;
+      }
+      frags.push(`<p class="ft-para">${esc(text)}</p>`);
+    }
   });
   const id = view === 'zh' ? ' id="ft-zh-text"' : '';
   return `<div class="ft-fulltext-block"${id}>${frags.join('')}</div>`;
